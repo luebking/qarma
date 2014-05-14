@@ -390,10 +390,15 @@ bool Qarma::readGeneral(QStringList &args) {
     return true;
 }
 
+#define NEW_DIALOG QDialog *dlg = new QDialog; QVBoxLayout *vl = new QVBoxLayout(dlg);
+#define FINISH_DIALOG(_BTNS_)   QDialogButtonBox *btns = new QDialogButtonBox(_BTNS_, Qt::Horizontal, dlg);\
+                                vl->addWidget(btns);\
+                                connect(btns, SIGNAL(accepted()), dlg, SLOT(accept()));\
+                                connect(btns, SIGNAL(rejected()), dlg, SLOT(reject()));
+
 char Qarma::showCalendar(const QStringList &args)
 {
-    QDialog *dlg = new QDialog;
-    QVBoxLayout *vl = new QVBoxLayout(dlg);
+    NEW_DIALOG
 
     QDate date = QDate::currentDate();
     int d,m,y;
@@ -423,14 +428,9 @@ char Qarma::showCalendar(const QStringList &args)
     QCalendarWidget *cal = new QCalendarWidget(dlg);
     cal->setSelectedDate(date);
     vl->addWidget(cal);
-
-    QDialogButtonBox *btns = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel, Qt::Horizontal, dlg);
-    vl->addWidget(btns);
-
     connect(cal, SIGNAL(activated(const QDate&)), dlg, SLOT(accept()));
-    connect(btns, SIGNAL(accepted()), dlg, SLOT(accept()));
-    connect(btns, SIGNAL(rejected()), dlg, SLOT(reject()));
 
+    FINISH_DIALOG(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
     SHOW_DIALOG
     return 0;
 }
@@ -454,8 +454,7 @@ char Qarma::showEntry(const QStringList &args)
 
 char Qarma::showPassword(const QStringList &args)
 {
-    QDialog *dlg = new QDialog;
-    QVBoxLayout *vl = new QVBoxLayout(dlg);
+    NEW_DIALOG
 
     QLineEdit *username(NULL), *password(NULL);
     for (int i = 0; i < args.count(); ++i) {
@@ -477,11 +476,7 @@ char Qarma::showPassword(const QStringList &args)
     else
         password->setFocus(Qt::OtherFocusReason);
 
-    QDialogButtonBox *btns = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel, Qt::Horizontal, dlg);
-    vl->addWidget(btns);
-    connect(btns, SIGNAL(accepted()), dlg, SLOT(accept()));
-    connect(btns, SIGNAL(rejected()), dlg, SLOT(reject()));
-
+    FINISH_DIALOG(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
     SHOW_DIALOG
     return 0;
 }
@@ -569,8 +564,8 @@ void Qarma::toggleItems(QTreeWidgetItem *item, int column)
 
 char Qarma::showList(const QStringList &args)
 {
-    QDialog *dlg = new QDialog;
-    QVBoxLayout *vl = new QVBoxLayout(dlg);
+    NEW_DIALOG
+
     QLabel *lbl;
     vl->addWidget(lbl = new QLabel(dlg));
 
@@ -658,10 +653,7 @@ char Qarma::showList(const QStringList &args)
     for (int i = 0; i < columns.count(); ++i)
         tw->resizeColumnToContents(i);
 
-    QDialogButtonBox *btns = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel, Qt::Horizontal, dlg);
-    vl->addWidget(btns);
-    connect(btns, SIGNAL(accepted()), dlg, SLOT(accept()));
-    connect(btns, SIGNAL(rejected()), dlg, SLOT(reject()));
+    FINISH_DIALOG(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
     SHOW_DIALOG
     return 0;
 }
@@ -816,8 +808,8 @@ void Qarma::printInteger(int v)
 
 char Qarma::showScale(const QStringList &args)
 {
-    QDialog *dlg = new QDialog;
-    QVBoxLayout *vl = new QVBoxLayout(dlg);
+    NEW_DIALOG
+
     QHBoxLayout *hl = new QHBoxLayout;
     QLabel *lbl, *val;
     QSlider *sld;
@@ -828,11 +820,7 @@ char Qarma::showScale(const QStringList &args)
     hl->addWidget(val = new QLabel(dlg));
     connect (sld, SIGNAL(valueChanged(int)), val, SLOT(setNum(int)));
 
-    QDialogButtonBox *btns = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel, Qt::Horizontal, dlg);
-    vl->addWidget(btns);
-
-    connect(btns, SIGNAL(accepted()), dlg, SLOT(accept()));
-    connect(btns, SIGNAL(rejected()), dlg, SLOT(reject()));
+    FINISH_DIALOG(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
 
     sld->setRange(0,100);
     val->setNum(0);
@@ -867,8 +855,7 @@ char Qarma::showScale(const QStringList &args)
 
 char Qarma::showText(const QStringList &args)
 {
-    QDialog *dlg = new QDialog;
-    QVBoxLayout *vl = new QVBoxLayout(dlg);
+    NEW_DIALOG
 
     QTextEdit *te;
     vl->addWidget(te = new QTextEdit(dlg));
@@ -893,11 +880,7 @@ char Qarma::showText(const QStringList &args)
         } else { WARN_UNKNOWN_ARG("--text-info") }
     }
 
-    QDialogButtonBox *btns = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel, Qt::Horizontal, dlg);
-    vl->addWidget(btns);
-
-    connect(btns, SIGNAL(accepted()), dlg, SLOT(accept()));
-    connect(btns, SIGNAL(rejected()), dlg, SLOT(reject()));
+    FINISH_DIALOG(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
 
     if (cb) {
         QPushButton *btn = btns->button(QDialogButtonBox::Ok);
@@ -962,9 +945,8 @@ static void buildList(QTreeWidget **tree, QStringList &values, QStringList &colu
 
 char Qarma::showForms(const QStringList &args)
 {
-    QDialog *dlg = new QDialog;
+    NEW_DIALOG
     dlg->setProperty("qarma_separator", "|");
-    QVBoxLayout *vl = new QVBoxLayout(dlg);
 
     QLabel *label;
     vl->addWidget(label = new QLabel(dlg));
@@ -1019,10 +1001,7 @@ char Qarma::showForms(const QStringList &args)
     buildList(&lastList, lastListValues, lastListColumns, lastListHeader);
 
 
-    QDialogButtonBox *btns = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel, Qt::Horizontal, dlg);
-    vl->addWidget(btns);
-    connect(btns, SIGNAL(accepted()), dlg, SLOT(accept()));
-    connect(btns, SIGNAL(rejected()), dlg, SLOT(reject()));
+    FINISH_DIALOG(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
     SHOW_DIALOG
     return 0;
 }
