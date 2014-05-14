@@ -1,0 +1,24 @@
+# Maintainer: Thomas Lübking <thomas.luebking at gmail>
+
+pkgname=qarma-zenity
+pkgver=1000.0.0
+pkgrel=1
+pkgdesc="A drop-in replacement clone for zenity, written in Qt4/5"
+arch=('any')
+url="https://github.com/luebking/qarma"
+license=('GPL')
+
+conflicts=('zenity')
+provides=('zenity')
+replaces=('zenity')
+
+depends=('qarma')
+license=('GPL')
+
+build()
+{
+    mkdir -p $pkgdir/usr/bin
+    ln -s /usr/bin/qarma $pkgdir/usr/bin/zenity
+}
+
+# vim:set ts=2 sw=2 et:
