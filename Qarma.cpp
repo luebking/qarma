@@ -227,6 +227,8 @@ static QString value(const QWidget *w, const QString &pattern)
         if (pattern.isNull())
             return t->selectedDate().toString(Qt::SystemLocaleShortDate);
         return t->selectedDate().toString(pattern);
+    } else IF_IS(QCheckBox) {
+        return t->isChecked() ? "true" : "false";
     }
     return QString();
 }
@@ -996,6 +998,8 @@ char Qarma::showForms(const QStringList &args)
             dlg->setProperty("qarma_separator", NEXT_ARG);
         } else if (args.at(i) == "--forms-date-format") {
             dlg->setProperty("qarma_date_format", NEXT_ARG);
+        } else if (args.at(i) == "--add-checkbox") {
+            fl->addRow(new QCheckBox(NEXT_ARG, dlg));
         } else { WARN_UNKNOWN_ARG("--forms") }
     }
     buildList(&lastList, lastListValues, lastListColumns, lastListHeader);
@@ -1138,7 +1142,8 @@ void Qarma::printHelp(const QString &category)
                             Help("--show-header", tr("Show the columns header")) <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--separator=SEPARATOR", tr("Set output separator character")) <<
-                            Help("--forms-date-format=PATTERN", tr("Set the format for the returned date")));
+                            Help("--forms-date-format=PATTERN", tr("Set the format for the returned date")) <<
+                            Help("--add-checkbox=Checkbox label", "QARMA ONLY! " + tr("Add a new Checkbox forms dialog")));
         helpDict["misc"] = CategoryHelp(tr("Miscellaneous options"), HelpList() <<
                             Help("--about", tr("About Qarma")) <<
                             Help("--version", tr("Print version")));
