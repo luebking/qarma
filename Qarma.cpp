@@ -1039,7 +1039,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--help-password", tr("Show password dialog options")) <<
                             Help("--help-forms", tr("Show forms dialog options")) <<
                             Help("--help-misc", tr("Show miscellaneous options")) <<
-                            Help("--help-gtk", tr("Show GTK+ Options")));
+                            Help("--help-qt", tr("Show Qt Options")));
         helpDict["general"] = CategoryHelp(tr("General options"), HelpList() <<
                             Help("--title=TITLE", tr("Set the dialog title")) <<
                             Help("--window-icon=ICONPATH", tr("Set the window icon")) <<
@@ -1176,7 +1176,7 @@ void Qarma::printHelp(const QString &category)
         it = helpDict.find(category);
 
     if (it == helpDict.constEnd()) {
-        printf("Usage:\n  %s [OPTION ...]\n\n", "qtdialog");
+        printf("Usage:\n  %s [OPTION ...]\n\n", qPrintable(applicationName()));
         printHelp("help");
         printHelp("application");
         return;
