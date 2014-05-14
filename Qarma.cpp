@@ -604,9 +604,11 @@ char Qarma::showList(const QStringList &args)
             qWarning("TODO: --print-column");
         } else if (args.at(i) == "--checklist") {
             tw->setSelectionMode(QAbstractItemView::NoSelection);
+            tw->setAllColumnsShowFocus(false);
             checkable = true;
         } else if (args.at(i) == "--radiolist") {
             tw->setSelectionMode(QAbstractItemView::NoSelection);
+            tw->setAllColumnsShowFocus(false);
             checkable = true;
             exclusive = true;
         } else if (args.at(i) == "--imagelist") {
