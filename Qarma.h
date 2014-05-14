@@ -34,7 +34,8 @@ public:
                 Scale, TextInfo, ColorSelection, Password, Forms };
 private:
     char showCalendar(const QStringList &args);
-    char showEntry(const QStringList &args, bool password);
+    char showEntry(const QStringList &args);
+    char showPassword(const QStringList &args);
 
     char showMessage(const QStringList &args, char type);
 

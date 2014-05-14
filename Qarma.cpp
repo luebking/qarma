@@ -116,7 +116,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
             error = showCalendar(args);
         } else if (arg == "--entry") {
             m_type = Entry;
-            error = showEntry(args, false);
+            error = showEntry(args);
         } else if (arg == "--error") {
             m_type = Error;
             error = showMessage(args, 'e');
@@ -152,7 +152,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
             error = showColorSelection(args);
         } else if (arg == "--password") {
             m_type = Password;
-            error = showEntry(args, true);
+            error = showPassword(args);
         } else if (arg == "--forms") {
             m_type = Forms;
             error = showForms(args);
@@ -260,14 +260,19 @@ void Qarma::dialogFinished(int status)
                 printf("%s\n", qPrintable(date.toString(format)));
             break;
         }
-        case Entry:
+        case Entry: {
+            printf("%s\n", qPrintable(static_cast<QInputDialog*>(sender())->textValue()));
+            break;
+        }
         case Password: {
-            QInputDialog *dlg = static_cast<QInputDialog*>(sender());
-            QString entry;
-            if (m_type == Password)
-                entry = dlg->findChild<QLineEdit*>("qarma_username")->text() + '|';
-            entry += dlg->textValue();
-            printf("%s\n", qPrintable(entry));
+            QLineEdit   *username = sender()->findChild<QLineEdit*>("qarma_username"),
+                        *password = sender()->findChild<QLineEdit*>("qarma_password");
+            QString result;
+            if (username)
+                result = username->text() + '|';
+            if (password)
+                result += password->text();
+            printf("%s\n", qPrintable(result));
             break;
         }
         case FileSelection: {
@@ -430,42 +435,54 @@ char Qarma::showCalendar(const QStringList &args)
     return 0;
 }
 
-char Qarma::showEntry(const QStringList &args, bool password)
+char Qarma::showEntry(const QStringList &args)
 {
     QInputDialog *dlg = new QInputDialog;
-    bool login = false;
-    if (password) {
-        dlg->setTextEchoMode(QLineEdit::Password);
-        dlg->setLabelText(tr("Enter password"));
-        for (int i = 0; i < args.count(); ++i) {
-            if (args.at(i) == "--username") {
-                login = true;
-                break;
-            } else { WARN_UNKNOWN_ARG("--password") }
-        }
-    } else {
-        for (int i = 0; i < args.count(); ++i) {
-            if (args.at(i) == "--text")
-                dlg->setLabelText(NEXT_ARG);
-            else if (args.at(i) == "--entry-text")
-                dlg->setTextValue(NEXT_ARG);
-            else if (args.at(i) == "--hide-text")
-                dlg->setTextEchoMode(QLineEdit::Password);
-            else { WARN_UNKNOWN_ARG("--entry") }
-        }
+    for (int i = 0; i < args.count(); ++i) {
+        if (args.at(i) == "--text")
+            dlg->setLabelText(NEXT_ARG);
+        else if (args.at(i) == "--entry-text")
+            dlg->setTextValue(NEXT_ARG);
+        else if (args.at(i) == "--hide-text")
+            dlg->setTextEchoMode(QLineEdit::Password);
+        else { WARN_UNKNOWN_ARG("--entry") }
     }
     SHOW_DIALOG
 
-    if (login) {
-        QLabel *lbl = new QLabel(tr("Enter username"), dlg);
-        QLineEdit *le = new QLineEdit(dlg);
-        le->setObjectName("qarma_username");
-        QBoxLayout *lay = static_cast<QBoxLayout*>(dlg->layout());
-        lay->insertWidget(0, le);
-        lay->insertWidget(0, lbl);
-        le->setFocus(Qt::OtherFocusReason);
+    return 0;
+}
+
+char Qarma::showPassword(const QStringList &args)
+{
+    QDialog *dlg = new QDialog;
+    QVBoxLayout *vl = new QVBoxLayout(dlg);
+
+    QLineEdit *username(NULL), *password(NULL);
+    for (int i = 0; i < args.count(); ++i) {
+        if (args.at(i) == "--username") {
+            vl->addWidget(new QLabel(tr("Enter username"), dlg));
+            vl->addWidget(username = new QLineEdit(dlg));
+            username->setObjectName("qarma_username");
+            break;
+        } else { WARN_UNKNOWN_ARG("--password") }
     }
 
+    vl->addWidget(new QLabel(tr("Enter password"), dlg));
+    vl->addWidget(password = new QLineEdit(dlg));
+    password->setObjectName("qarma_password");
+    password->setEchoMode(QLineEdit::Password);
+
+    if (username)
+        username->setFocus(Qt::OtherFocusReason);
+    else
+        password->setFocus(Qt::OtherFocusReason);
+
+    QDialogButtonBox *btns = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel, Qt::Horizontal, dlg);
+    vl->addWidget(btns);
+    connect(btns, SIGNAL(accepted()), dlg, SLOT(accept()));
+    connect(btns, SIGNAL(rejected()), dlg, SLOT(reject()));
+
+    SHOW_DIALOG
     return 0;
 }
 
