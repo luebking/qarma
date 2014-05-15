@@ -726,8 +726,17 @@ void Qarma::readStdIn()
     if (notifier)
         notifier->setEnabled(false);
 
+    QByteArray ba = gs_stdin->readLine();
+    if (ba.isEmpty() && notifier) {
+        gs_stdin->close();
+//         gs_stdin->deleteLater(); // hello segfault...
+//         gs_stdin = NULL;
+        notifier->deleteLater();
+        return;
+    }
+
     static QString cachedText;
-    QString newText = QString::fromLocal8Bit(gs_stdin->readLine());
+    QString newText = QString::fromLocal8Bit(ba);
     if (newText.isEmpty() && cachedText.isEmpty()) {
         if (notifier)
             notifier->setEnabled(true);
