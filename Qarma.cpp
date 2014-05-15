@@ -935,6 +935,18 @@ char Qarma::showText(const QStringList &args)
         } else { WARN_UNKNOWN_ARG("--text-info") }
     }
 
+    if (te->isReadOnly()) {
+        QPalette pal = te->viewport()->palette();
+        for (int i = 0; i < 4; ++i) { // Disabled, Active, Inactive, Normal
+            QPalette::ColorGroup cg = (QPalette::ColorGroup)i;
+            pal.setColor(cg, QPalette::Base, pal.color(cg, QPalette::Window));
+            pal.setColor(cg, QPalette::Text, pal.color(cg, QPalette::WindowText));
+        }
+        te->viewport()->setPalette(pal);
+        te->viewport()->setAutoFillBackground(false);
+        te->setFrameStyle(QFrame::NoFrame);
+    }
+
     if (needStdIn)
         listenToStdIn();
 
