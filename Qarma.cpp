@@ -37,7 +37,9 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QPropertyAnimation>
 #include <QPushButton>
+#include <QScrollBar>
 #include <QSlider>
 #include <QSocketNotifier>
 #include <QStringBuilder>
@@ -720,9 +722,21 @@ static QFile *gs_stdin = 0;
 
 void Qarma::readStdIn()
 {
-    static_cast<QSocketNotifier*>(sender())->setEnabled(false);
-    QStringList input = QString::fromLocal8Bit(gs_stdin->readLine()).split('\n');
-    static_cast<QSocketNotifier*>(sender())->setEnabled(true);
+    QSocketNotifier *notifier = qobject_cast<QSocketNotifier*>(sender());
+    if (notifier)
+        notifier->setEnabled(false);
+
+    static QString cachedText;
+    QString newText = QString::fromLocal8Bit(gs_stdin->readLine());
+    if (newText.isEmpty() && cachedText.isEmpty()) {
+        if (notifier)
+            notifier->setEnabled(true);
+        return;
+    }
+
+    QStringList input;
+    if (m_type != TextInfo)
+        input = newText.split('\n');
     if (m_type == Progress) {
         QProgressDialog *dlg = static_cast<QProgressDialog*>(m_dialog);
         bool ok;
@@ -733,6 +747,30 @@ void Qarma::readStdIn()
         }
         if (dlg->value() == 100 && dlg->property("qarma_autoclose").toBool()) {
             QTimer::singleShot(250, this, SLOT(quit()));
+        }
+    } else if (m_type == TextInfo) {
+        if (QTextEdit *te = m_dialog->findChild<QTextEdit*>()) {
+            cachedText += newText;
+            static QPropertyAnimation *animator = NULL;
+            if (!animator || animator->state() != QPropertyAnimation::Running) {
+                const int oldValue = te->verticalScrollBar() ? te->verticalScrollBar()->value() : 0;
+                te->setText(te->toPlainText() + cachedText);
+                cachedText.clear();
+                if (te->verticalScrollBar() && te->property("qarma_autoscroll").toBool()) {
+                    te->verticalScrollBar()->setValue(oldValue);
+                    if (!animator) {
+                        animator = new QPropertyAnimation(te->verticalScrollBar(), "value", this);
+                        animator->setEasingCurve(QEasingCurve::InOutCubic);
+                        connect(animator, SIGNAL(finished()), SLOT(readStdIn()));
+                    }
+                    const int diff = te->verticalScrollBar()->maximum() - oldValue;
+                    if (diff > 0) {
+                        animator->setDuration(qMin(qMax(200, diff), 2500));
+                        animator->setEndValue(te->verticalScrollBar()->maximum());
+                        animator->start();
+                    }
+                }
+            }
         }
     } else if (m_type == Notification) {
         bool userNeedsHelp = true;
@@ -761,6 +799,8 @@ void Qarma::readStdIn()
         if (userNeedsHelp)
             qDebug() << "icon: <filename>\nmessage: <UTF-8 encoded text>\ntooltip: <UTF-8 encoded text>\nvisible: <true|false>";
     }
+    if (notifier)
+        notifier->setEnabled(true);
 }
 
 void Qarma::listenToStdIn()
@@ -866,8 +906,10 @@ char Qarma::showText(const QStringList &args)
     te->setReadOnly(true);
     QCheckBox *cb(NULL);
 
+    bool needStdIn(true);
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--filename") {
+            needStdIn = false;
             QFile file(NEXT_ARG);
             if (file.open(QIODevice::ReadOnly)) {
                 te->setText(QString::fromLocal8Bit(file.readAll()));
@@ -880,9 +922,12 @@ char Qarma::showText(const QStringList &args)
         } else if (args.at(i) == "--checkbox") {
             vl->addWidget(cb = new QCheckBox(NEXT_ARG, dlg));
         } else if (args.at(i) == "--auto-scroll") {
-            // TODO  this does nothing on zenity?
+            te->setProperty("qarma_autoscroll", true);
         } else { WARN_UNKNOWN_ARG("--text-info") }
     }
+
+    if (needStdIn)
+        listenToStdIn();
 
     FINISH_DIALOG(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
 
