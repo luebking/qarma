@@ -393,8 +393,8 @@ bool Qarma::readGeneral(QStringList &args) {
             QTimer::singleShot(t*1000, this, SLOT(quit()));
         } else if (args.at(i) == "--ok-label") {
             m_ok = NEXT_ARG;
-        } else if (args.at(i) == "--ok-label") {
-            m_ok = NEXT_ARG;
+        } else if (args.at(i) == "--cancel-label") {
+            m_cancel = NEXT_ARG;
         } else if (args.at(i) == "--modal") {
             m_modal = true;
         } else if (args.at(i) == "--attach") {
