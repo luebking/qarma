@@ -49,6 +49,11 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
+#if QT_VERSION >= 0x050000
+// this is to hack access to the --title parameter in Qt5
+#include <QWindow>
+#endif
+
 #include <QtDebug>
 
 #ifdef Q_OS_UNIX
@@ -163,11 +168,23 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
             break;
         }
     }
+
     if (error) {
         QMetaObject::invokeMethod(this, "quit", Qt::QueuedConnection);
         return;
     }
+
     if (m_dialog) {
+#if QT_VERSION >= 0x050000
+        // this hacks access to the --title parameter in Qt5
+        // for some reason it's not set on the dialog.
+        // since it's set on showing the first QWindow, we just create one here and copy the title
+        // TODO: remove once this is fixed in Qt5
+        QWindow *w = new QWindow;
+        w->setVisible(true);
+        m_dialog->setWindowTitle(w->title());
+        delete w;
+#endif
         if (!m_size.isNull()) {
             m_dialog->adjustSize();
             QSize sz = m_dialog->size();
