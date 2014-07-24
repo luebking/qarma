@@ -778,12 +778,12 @@ void Qarma::readStdIn()
             else {
                 disconnect (dlg, SIGNAL(canceled()), dlg, SLOT(reject()));
                 connect (dlg, SIGNAL(canceled()), dlg, SLOT(accept()));
-                dlg->setCancelButtonText(tr("Ok"));
+                dlg->setCancelButtonText(m_ok.isNull() ? tr("Ok") : m_ok);
             }
         } else if (oldValue == 100) {
             disconnect (dlg, SIGNAL(canceled()), dlg, SLOT(accept()));
             connect (dlg, SIGNAL(canceled()), dlg, SLOT(reject()));
-            dlg->setCancelButtonText(tr("Cancel"));
+            dlg->setCancelButtonText(m_cancel.isNull() ? tr("Cancel") : m_cancel);
         }
     } else if (m_type == TextInfo) {
         if (QTextEdit *te = m_dialog->findChild<QTextEdit*>()) {
@@ -877,6 +877,8 @@ char Qarma::showProgress(const QStringList &args)
     if (dlg->maximum() > 0) { // don't pulsate
         listenToStdIn();
     }
+    if (!m_cancel.isNull())
+        dlg->setCancelButtonText(m_cancel);
     connect (dlg, SIGNAL(canceled()), dlg, SLOT(reject()));
     SHOW_DIALOG
     return 0;
