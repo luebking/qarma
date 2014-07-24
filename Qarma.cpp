@@ -748,14 +748,25 @@ void Qarma::readStdIn()
         input = newText.split('\n');
     if (m_type == Progress) {
         QProgressDialog *dlg = static_cast<QProgressDialog*>(m_dialog);
+        const int oldValue = dlg->value();
         bool ok;
         foreach (QString line, input) {
             int u = line.toInt(&ok);
             if (ok)
-                dlg->setValue(u);
+                dlg->setValue(qMin(100,u));
         }
-        if (dlg->value() == 100 && dlg->property("qarma_autoclose").toBool()) {
-            QTimer::singleShot(250, this, SLOT(quit()));
+        if (dlg->value() == 100) {
+            if (dlg->property("qarma_autoclose").toBool())
+                QTimer::singleShot(250, this, SLOT(quit()));
+            else {
+                disconnect (dlg, SIGNAL(canceled()), dlg, SLOT(reject()));
+                connect (dlg, SIGNAL(canceled()), dlg, SLOT(accept()));
+                dlg->setCancelButtonText(tr("Ok"));
+            }
+        } else if (oldValue == 100) {
+            disconnect (dlg, SIGNAL(canceled()), dlg, SLOT(accept()));
+            connect (dlg, SIGNAL(canceled()), dlg, SLOT(reject()));
+            dlg->setCancelButtonText(tr("Cancel"));
         }
     } else if (m_type == TextInfo) {
         if (QTextEdit *te = m_dialog->findChild<QTextEdit*>()) {
