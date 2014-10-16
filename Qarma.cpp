@@ -73,7 +73,6 @@ typedef QMap<QString, CategoryHelp> HelpDict;
 
 
 Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
-, m_helpMission(false)
 , m_modal(false)
 , m_parentWindow(0)
 , m_timeout(0)
@@ -81,13 +80,8 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_dialog(NULL)
 , m_type(Invalid)
 {
-    if (argc < 2) {
-        printHelp();
-        QMetaObject::invokeMethod(this, "quit", Qt::QueuedConnection);
-        return;
-    }
-
-    QStringList argList = arguments(); // arguments() is slow
+    QStringList argList = QCoreApplication::arguments(); // arguments() is slow
+    // make canonical list
     QStringList args;
     for (int i = 1; i < argList.count(); ++i) {
         if (argList.at(i).startsWith("--")) {
@@ -102,16 +96,6 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         }
     }
     argList.clear();
-
-    foreach (const QString &arg, args) {
-        if (arg == "-h" || arg.startsWith("--help"))
-            printHelp(arg.mid(7)); // "--help-"
-    }
-
-    if (m_helpMission) {
-        QMetaObject::invokeMethod(this, "quit", Qt::QueuedConnection);
-        return;
-    }
 
     if (!readGeneral(args))
         return;
@@ -461,7 +445,7 @@ char Qarma::showEntry(const QStringList &args)
     QInputDialog *dlg = new QInputDialog;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--text")
-            dlg->setLabelText(NEXT_ARG);
+            dlg->setLabelText(labelText(NEXT_ARG));
         else if (args.at(i) == "--entry-text")
             dlg->setTextValue(NEXT_ARG);
         else if (args.at(i) == "--hide-text")
@@ -511,7 +495,7 @@ char Qarma::showMessage(const QStringList &args, char type)
     bool wrap = true, html = true;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--text")
-            dlg->setText(NEXT_ARG);
+            dlg->setText(labelText(NEXT_ARG));
         else if (args.at(i) == "--icon-name")
             dlg->setIconPixmap(QIcon(NEXT_ARG).pixmap(64));
         else if (args.at(i) == "--no-wrap")
@@ -604,7 +588,7 @@ char Qarma::showList(const QStringList &args)
     dlg->setProperty("qarma_separator", "|");
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--text")
-            lbl->setText(NEXT_ARG);
+            lbl->setText(labelText(NEXT_ARG));
         else if (args.at(i) == "--multiple")
             tw->setSelectionMode(QAbstractItemView::ExtendedSelection);
         else if (args.at(i) == "--column") {
@@ -708,7 +692,7 @@ void Qarma::notify(const QString message, bool noClose)
             l->setWordWrap(true);
         }
     }
-    dlg->setText(message);
+    dlg->setText(labelText(message));
     SHOW_DIALOG
     dlg->adjustSize();
     dlg->move(QApplication::desktop()->availableGeometry().topRight() - QPoint(dlg->width() + 20, -20));
@@ -860,7 +844,7 @@ char Qarma::showProgress(const QStringList &args)
     dlg->setRange(0, 101);
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--text")
-            dlg->setLabelText(NEXT_ARG);
+            dlg->setLabelText(labelText(NEXT_ARG));
         else if (args.at(i) == "--percentage")
             dlg->setValue(NEXT_ARG.toUInt());
         else if (args.at(i) == "--pulsate")
@@ -911,7 +895,7 @@ char Qarma::showScale(const QStringList &args)
     bool ok;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--text")
-            lbl->setText(NEXT_ARG);
+            lbl->setText(labelText(NEXT_ARG));
         else if (args.at(i) == "--value")
             sld->setValue(NEXT_ARG.toInt());
         else if (args.at(i) == "--min-value") {
@@ -1091,7 +1075,7 @@ char Qarma::showForms(const QStringList &args)
         } else if (args.at(i) == "--show-header") {
             lastListHeader = true;
         } else if (args.at(i) == "--text") {
-            label->setText(NEXT_ARG);
+            label->setText(labelText(NEXT_ARG));
         } else if (args.at(i) == "--separator") {
             dlg->setProperty("qarma_separator", NEXT_ARG);
         } else if (args.at(i) == "--forms-date-format") {
@@ -1108,11 +1092,17 @@ char Qarma::showForms(const QStringList &args)
     return 0;
 }
 
+QString Qarma::labelText(const QString &s) const
+{
+//     if (m_zenity && Qt::mightBeRichText(s)) {
+//         return QString(s).replace("\\n", "<br>").replace(QRegExp("[^\\\\]\\\\t"), "&ensp;");
+//     }
+    return s;
+}
+
 
 void Qarma::printHelp(const QString &category)
 {
-    m_helpMission = true;
-
     static HelpDict helpDict;
     if (helpDict.isEmpty()) {
         helpDict["help"] = CategoryHelp(tr("Help options"), HelpList() <<
@@ -1286,6 +1276,24 @@ void Qarma::printHelp(const QString &category)
 
 int main (int argc, char **argv)
 {
+    if (argc < 2) {
+        Qarma::printHelp();
+        return 1;
+    }
+
+    bool helpMission = false;
+    for (int i = 1; i < argc; ++i) {
+        const QString arg(argv[i]);
+        if (arg == "-h" || arg.startsWith("--help")) {
+            helpMission = true;
+            Qarma::printHelp(arg.mid(7)); // "--help-"
+        }
+    }
+
+    if (helpMission) {
+        return 0;
+    }
+
     Qarma d(argc, argv);
     return d.exec();
 }

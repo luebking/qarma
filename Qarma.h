@@ -32,6 +32,7 @@ public:
     Qarma(int &argc, char **argv);
     enum Type { Invalid, Calendar, Entry, Error, Info, FileSelection, List, Notification, Progress, Question, Warning,
                 Scale, TextInfo, ColorSelection, Password, Forms };
+    static void printHelp(const QString &category = QString());
 private:
     char showCalendar(const QStringList &args);
     char showEntry(const QStringList &args);
@@ -48,10 +49,11 @@ private:
     char showColorSelection(const QStringList &args);
     char showForms(const QStringList &args);
     bool readGeneral(QStringList &args);
-    void printHelp(const QString &category = QString());
     bool error(const QString message);
     void listenToStdIn();
     void notify(const QString message, bool noClose = false);
+
+    QString labelText(const QString &s) const; // m_zenity requires \n and \t interpretation in html.
 private slots:
     void dialogFinished(int status);
     void printInteger(int v);
@@ -59,7 +61,7 @@ private slots:
     void readStdIn();
     void toggleItems(QTreeWidgetItem *item, int column);
 private:
-    bool m_helpMission, m_modal;
+    bool m_helpMission, m_modal, m_zenity;
     QString m_caption, m_icon, m_ok, m_cancel, m_notificationHints;
     QSize m_size;
     int m_parentWindow, m_timeout;
