@@ -29,6 +29,7 @@
 #include <QDBusInterface>
 #include <QDesktopWidget>
 #include <QDialogButtonBox>
+#include <QEvent>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QIcon>
@@ -46,6 +47,7 @@
 #include <QStringList>
 #include <QTextEdit>
 #include <QTimer>
+#include <QTimerEvent>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
@@ -60,6 +62,75 @@
 #include <signal.h>
 #include <unistd.h>
 #endif
+
+class InputGuard : public QObject
+{
+public:
+    InputGuard() : QObject(), m_guardedWidget(NULL), m_checkTimer(0) {}
+    static void watch(QWidget *w) {
+        if (!s_instance)
+            s_instance = new InputGuard;
+        w->installEventFilter(s_instance);
+    }
+protected:
+    bool eventFilter(QObject *o, QEvent *e) {
+        QWidget *w = static_cast<QWidget*>(o);
+        switch (e->type()) {
+            case QEvent::FocusIn:
+            case QEvent::WindowActivate:
+                if (hasActiveFocus(w))
+                    guard(w);
+                break;
+            case QEvent::FocusOut:
+            case QEvent::WindowDeactivate:
+                if (w == m_guardedWidget && !hasActiveFocus(w))
+                    unguard(w);
+                break;
+            default:
+                break;
+        }
+        return false;
+    }
+    void timerEvent(QTimerEvent *te) {
+        if (te->timerId() == m_checkTimer && m_guardedWidget)
+            check(m_guardedWidget);
+        else
+            QObject::timerEvent(te);
+    }
+private:
+    bool check(QWidget *w) {
+        if (w == QWidget::keyboardGrabber()) {
+            w->setPalette(QPalette());
+            return true;
+        }
+        w->setPalette(QPalette(Qt::white, Qt::red, Qt::white, Qt::black, Qt::gray,
+                               Qt::white, Qt::white, Qt::red, Qt::red));
+        return false;
+    }
+    void guard(QWidget *w) {
+        w->grabKeyboard();
+        if (check(w))
+            m_guardedWidget = w;
+        if (!m_checkTimer)
+            m_checkTimer = startTimer(500);
+    }
+    bool hasActiveFocus(QWidget *w) {
+        return w == QApplication::focusWidget() && w->isActiveWindow();
+    }
+    void unguard(QWidget *w) {
+        Q_ASSERT(m_guardedWidget == w);
+        killTimer(m_checkTimer);
+        m_checkTimer = 0;
+        m_guardedWidget = NULL;
+        w->releaseKeyboard();
+    }
+private:
+    QWidget *m_guardedWidget;
+    int m_checkTimer;
+    static InputGuard *s_instance;
+};
+
+InputGuard *InputGuard::s_instance = NULL;
 
 #ifdef WS_X11
 #include <QX11Info>
@@ -475,6 +546,8 @@ char Qarma::showPassword(const QStringList &args)
     vl->addWidget(password = new QLineEdit(dlg));
     password->setObjectName("qarma_password");
     password->setEchoMode(QLineEdit::Password);
+
+    InputGuard::watch(password);
 
     if (username)
         username->setFocus(Qt::OtherFocusReason);
