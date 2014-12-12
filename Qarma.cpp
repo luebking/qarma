@@ -68,6 +68,10 @@ class InputGuard : public QObject
 public:
     InputGuard() : QObject(), m_guardedWidget(NULL), m_checkTimer(0) {}
     static void watch(QWidget *w) {
+#if QT_VERSION >= 0x050000
+        if (qApp->platformName() == "wayland")
+            return;
+#endif
         if (!s_instance)
             s_instance = new InputGuard;
         w->installEventFilter(s_instance);
@@ -99,6 +103,11 @@ protected:
     }
 private:
     bool check(QWidget *w) {
+#if QT_VERSION >= 0x050000
+        // try to re-grab
+        if (!w->window()->windowHandle()->setKeyboardGrabEnabled(true))
+            w->releaseKeyboard();
+#endif
         if (w == QWidget::keyboardGrabber()) {
             w->setPalette(QPalette());
             return true;
