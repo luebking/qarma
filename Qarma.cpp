@@ -940,8 +940,9 @@ char Qarma::showProgress(const QStringList &args)
                 btn->hide();
         } else { WARN_UNKNOWN_ARG("--progress") }
     }
-    if (dlg->maximum() > 0) { // don't pulsate
-        listenToStdIn();
+    listenToStdIn();
+    if (dlg->maximum() < 1) { // pulsate, quit as stdin closes
+        connect (gs_stdin, SIGNAL(aboutToClose()), dlg, SLOT(accept()));
     }
     if (!m_cancel.isNull())
         dlg->setCancelButtonText(m_cancel);
