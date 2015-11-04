@@ -803,6 +803,23 @@ char Qarma::showNotification(const QStringList &args)
 
 static QFile *gs_stdin = 0;
 
+void Qarma::finishProgress()
+{
+    Q_ASSERT(m_type == Progress);
+    QProgressDialog *dlg = static_cast<QProgressDialog*>(m_dialog);
+    if (dlg->property("qarma_autoclose").toBool())
+        QTimer::singleShot(250, this, SLOT(quit()));
+    else {
+        dlg->setRange(0, 101);
+        dlg->setValue(100);
+        disconnect (dlg, SIGNAL(canceled()), dlg, SLOT(reject()));
+        connect (dlg, SIGNAL(canceled()), dlg, SLOT(accept()));
+        dlg->setCancelButtonText(m_ok.isNull() ? tr("Ok") : m_ok);
+        if (QPushButton *btn = dlg->findChild<QPushButton*>())
+            btn->show();
+    }
+}
+
 void Qarma::readStdIn()
 {
     QSocketNotifier *notifier = qobject_cast<QSocketNotifier*>(sender());
@@ -831,6 +848,8 @@ void Qarma::readStdIn()
         input = newText.split('\n');
     if (m_type == Progress) {
         QProgressDialog *dlg = static_cast<QProgressDialog*>(m_dialog);
+        if (dlg->maximum() == 0)
+            return; // no input for pulsating progress
         const int oldValue = dlg->value();
         bool ok;
         foreach (QString line, input) {
@@ -839,13 +858,7 @@ void Qarma::readStdIn()
                 dlg->setValue(qMin(100,u));
         }
         if (dlg->value() == 100) {
-            if (dlg->property("qarma_autoclose").toBool())
-                QTimer::singleShot(250, this, SLOT(quit()));
-            else {
-                disconnect (dlg, SIGNAL(canceled()), dlg, SLOT(reject()));
-                connect (dlg, SIGNAL(canceled()), dlg, SLOT(accept()));
-                dlg->setCancelButtonText(m_ok.isNull() ? tr("Ok") : m_ok);
-            }
+            finishProgress();
         } else if (oldValue == 100) {
             disconnect (dlg, SIGNAL(canceled()), dlg, SLOT(accept()));
             connect (dlg, SIGNAL(canceled()), dlg, SLOT(reject()));
@@ -940,10 +953,12 @@ char Qarma::showProgress(const QStringList &args)
                 btn->hide();
         } else { WARN_UNKNOWN_ARG("--progress") }
     }
+
     listenToStdIn();
-    if (dlg->maximum() < 1) { // pulsate, quit as stdin closes
-        connect (gs_stdin, SIGNAL(aboutToClose()), dlg, SLOT(accept()));
+    if (dlg->maximum() == 0) { // pulsate, quit as stdin closes
+        connect (gs_stdin, SIGNAL(aboutToClose()), this, SLOT(finishProgress()));
     }
+
     if (!m_cancel.isNull())
         dlg->setCancelButtonText(m_cancel);
     connect (dlg, SIGNAL(canceled()), dlg, SLOT(reject()));
