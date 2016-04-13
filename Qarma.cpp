@@ -18,6 +18,7 @@
 
 #include "Qarma.h"
 
+#include <QAction>
 #include <QBoxLayout>
 #include <QCalendarWidget>
 #include <QCheckBox>
@@ -249,6 +250,12 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         m_dialog->setWindowTitle(w->title());
         delete w;
 #endif
+        // close on ctrl+return in addition to ctrl+enter
+        QAction *shortAccept = new QAction(m_dialog);
+        m_dialog->addAction(shortAccept);
+        shortAccept->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Return));
+        connect (shortAccept, SIGNAL(triggered()), m_dialog, SLOT(accept()));
+
         if (!m_size.isNull()) {
             m_dialog->adjustSize();
             QSize sz = m_dialog->size();
