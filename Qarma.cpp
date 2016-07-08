@@ -325,7 +325,7 @@ static QString value(const QWidget *w, const QString &pattern)
 
 void Qarma::dialogFinished(int status)
 {
-    if (status != QDialog::Accepted) {
+    if (!(status == QDialog::Accepted || status == QMessageBox::Ok)) {
 #ifdef Q_OS_UNIX
         if (sender()->property("qarma_autokill_parent").toBool()) {
             ::kill(getppid(), 15);
