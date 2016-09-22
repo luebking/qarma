@@ -155,6 +155,7 @@ typedef QMap<QString, CategoryHelp> HelpDict;
 
 Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_modal(false)
+, m_selectableLabel(false)
 , m_parentWindow(0)
 , m_timeout(0)
 , m_notificationId(0)
@@ -593,6 +594,8 @@ char Qarma::showMessage(const QStringList &args, char type)
             html = false;
         else if (args.at(i) == "--default-cancel")
             dlg->setDefaultButton(QMessageBox::Cancel);
+        else if (args.at(i) == "--selectable-labels")
+            m_selectableLabel = true;
         else if (args.at(i).startsWith("--") && args.at(i) != "--info" && args.at(i) != "--question" &&
                                                 args.at(i) != "--warning" && args.at(i) != "--error")
             qDebug() << "unspecific argument" << args.at(i);
@@ -600,6 +603,8 @@ char Qarma::showMessage(const QStringList &args, char type)
     if (QLabel *l = dlg->findChild<QLabel*>("qt_msgbox_label")) {
         l->setWordWrap(wrap);
         l->setTextFormat(html ? Qt::RichText : Qt::PlainText);
+        if (m_selectableLabel)
+            l->setTextInteractionFlags(l->textInteractionFlags()|Qt::TextSelectableByMouse);
     }
     if (dlg->iconPixmap().isNull())
         dlg->setIcon(type == 'w' ? QMessageBox::Warning :
@@ -779,6 +784,8 @@ void Qarma::notify(const QString message, bool noClose)
         dlg->setWindowOpacity(0.8);
         if (QLabel *l = dlg->findChild<QLabel*>("qt_msgbox_label")) {
             l->setWordWrap(true);
+            if (m_selectableLabel)
+                l->setTextInteractionFlags(l->textInteractionFlags()|Qt::TextSelectableByMouse);
         }
     }
     dlg->setText(labelText(message));
@@ -799,6 +806,8 @@ char Qarma::showNotification(const QStringList &args)
             listenToStdIn();
         } else if (args.at(i) == "--hint") {
             m_notificationHints = NEXT_ARG;
+        } else if (args.at(i) == "--selectable-labels") {
+            m_selectableLabel = true;
         } else { WARN_UNKNOWN_ARG("--notification") }
     }
     if (!message.isEmpty())
@@ -1256,12 +1265,14 @@ void Qarma::printHelp(const QString &category)
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
-                            Help("--no-markup", tr("Do not enable html markup")));
+                            Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["info"] = CategoryHelp(tr("Info options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
-                            Help("--no-markup", tr("Do not enable html markup")));
+                            Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["file-selection"] = CategoryHelp(tr("File selection options"), HelpList() <<
                             Help("--filename=FILENAME", tr("Set the filename")) <<
                             Help("--multiple", tr("Allow multiple files to be selected")) <<
@@ -1285,7 +1296,8 @@ void Qarma::printHelp(const QString &category)
         helpDict["notification"] = CategoryHelp(tr("Notification icon options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--listen", tr("Listen for commands on stdin")) <<
-                            Help("--hint=TEXT", tr("Set the notification hints")));
+                            Help("--hint=TEXT", tr("Set the notification hints")) <<
+                            Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["progress"] = CategoryHelp(tr("Progress options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--percentage=PERCENTAGE", tr("Set initial percentage")) <<
@@ -1298,12 +1310,14 @@ void Qarma::printHelp(const QString &category)
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
-                            Help("--default-cancel", tr("Give cancel button focus by default")));
+                            Help("--default-cancel", tr("Give cancel button focus by default")) <<
+                            Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["warning"] = CategoryHelp(tr("Warning options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
-                            Help("--no-markup", tr("Do not enable html markup")));
+                            Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["scale"] = CategoryHelp(tr("Scale options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--value=VALUE", tr("Set initial value")) <<
