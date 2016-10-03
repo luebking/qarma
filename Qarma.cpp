@@ -696,7 +696,7 @@ char Qarma::showList(const QStringList &args)
         else if (args.at(i) == "--hide-column") {
             int v = NEXT_ARG.toInt(&ok);
             if (ok)
-                hiddenCols << v;
+                hiddenCols << v-1;
         } else if (args.at(i) == "--print-column") {
             qWarning("TODO: --print-column");
         } else if (args.at(i) == "--checklist") {
