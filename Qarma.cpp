@@ -42,6 +42,7 @@
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QSettings>
 #include <QSlider>
 #include <QSocketNotifier>
 #include <QStringBuilder>
@@ -374,7 +375,12 @@ void Qarma::dialogFinished(int status)
             break;
         }
         case ColorSelection: {
-            printf("%s\n", qPrintable(static_cast<QColorDialog*>(sender())->selectedColor().name()));
+            QColorDialog *dlg = static_cast<QColorDialog*>(sender());
+            printf("%s\n", qPrintable(dlg->selectedColor().name()));
+            QVariantList l;
+            for (int i = 0; i < dlg->customCount(); ++i)
+                l << dlg->customColor(i).rgba();
+            QSettings("qarma").setValue("CustomPalette", l);
             break;
         }
         case TextInfo: {
@@ -1094,6 +1100,9 @@ char Qarma::showText(const QStringList &args)
 char Qarma::showColorSelection(const QStringList &args)
 {
     QColorDialog *dlg = new QColorDialog;
+    QVariantList l = QSettings("qarma").value("CustomPalette").toList();
+    for (int i = 0; i < l.count() && i < dlg->customCount(); ++i)
+        dlg->setCustomColor(i, QColor(l.at(i).toUInt()));
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--color") {
             dlg->setCurrentColor(QColor(NEXT_ARG));
