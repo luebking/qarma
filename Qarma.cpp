@@ -327,6 +327,14 @@ static QString value(const QWidget *w, const QString &pattern)
 
 void Qarma::dialogFinished(int status)
 {
+    if (m_type == FileSelection) {
+        QFileDialog *dlg = static_cast<QFileDialog*>(sender());
+        QVariantList l;
+        for (int i = 0; i < dlg->sidebarUrls().count(); ++i)
+            l << dlg->sidebarUrls().at(i);
+        QSettings("qarma").setValue("Bookmarks", l);
+    }
+
     if (!(status == QDialog::Accepted || status == QMessageBox::Ok)) {
 #ifdef Q_OS_UNIX
         if (sender()->property("qarma_autokill_parent").toBool()) {
@@ -626,6 +634,12 @@ char Qarma::showFileSelection(const QStringList &args)
     dlg->setFileMode(QFileDialog::ExistingFile);
     dlg->setOption(QFileDialog::DontConfirmOverwrite, false);
     dlg->setProperty("qarma_separator", "|");
+    QVariantList l = QSettings("qarma").value("Bookmarks").toList();
+    QList<QUrl> bookmarks;
+    for (int i = 0; i < l.count(); ++i)
+        bookmarks << l.at(i).toUrl();
+    if (!bookmarks.isEmpty())
+        dlg->setSidebarUrls(bookmarks);
     QStringList mimeFilters;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--filename")
