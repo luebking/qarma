@@ -1,7 +1,9 @@
 qarma
 =====
 
-Zenity Clone for Qt4/Qt5
+Qarma is a tool to create dialog boxes, based on Qt.
+It's a clone of Zenity which was written for GTK+.
+
 
 Q: Why do you waste time cloning a perfectly fine tool?
 
