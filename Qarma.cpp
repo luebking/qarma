@@ -485,7 +485,7 @@ bool Qarma::readGeneral(QStringList &args) {
             m_modal = true;
         } else if (args.at(i) == "--attach") {
             bool ok;
-            const int w = NEXT_ARG.toUInt(&ok);
+            const int w = NEXT_ARG.toUInt(&ok, 0);
             if (!ok)
                 return !error("--attach must be followed by a positive number");
             m_parentWindow = w;
