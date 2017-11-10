@@ -649,8 +649,10 @@ char Qarma::showFileSelection(const QStringList &args)
         else if (args.at(i) == "--directory") {
             dlg->setFileMode(QFileDialog::Directory);
             dlg->setOption(QFileDialog::ShowDirsOnly);
-        } else if (args.at(i) == "--save")
+        } else if (args.at(i) == "--save") {
             dlg->setFileMode(QFileDialog::AnyFile);
+            dlg->setAcceptMode(QFileDialog::AcceptSave);
+        }
         else if (args.at(i) == "--separator")
             dlg->setProperty("qarma_separator", NEXT_ARG);
         else if (args.at(i) == "--confirm-overwrite")
