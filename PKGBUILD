@@ -8,13 +8,17 @@ arch=('i686' 'x86_64')
 url="https://github.com/luebking/qarma"
 license=('GPL')
 
-depends=('qt4')
+depends=('qt5-base')
 makedepends=('gcc')
 license=('GPL')
 
 build()
 {
-    qmake .. && make || return 1
+    qmake-qt5 .. && make || return 1
+}
+
+package()
+{
     mkdir -p $pkgdir/usr/bin
     install qarma $pkgdir/usr/bin
     strip $pkgdir/usr/bin/qarma
