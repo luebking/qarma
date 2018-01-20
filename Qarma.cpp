@@ -600,7 +600,7 @@ char Qarma::showPassword(const QStringList &args)
 char Qarma::showMessage(const QStringList &args, char type)
 {
     QMessageBox *dlg = new QMessageBox;
-    dlg->setStandardButtons((type == 'q') ? QMessageBox::Ok|QMessageBox::Cancel : QMessageBox::Ok);
+    dlg->setStandardButtons((type == 'q') ? QMessageBox::Yes|QMessageBox::No : QMessageBox::Ok);
     dlg->setDefaultButton(QMessageBox::Ok);
 
     bool wrap = true, html = true;
