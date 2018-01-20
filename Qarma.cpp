@@ -258,6 +258,13 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         shortAccept->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Return));
         connect (shortAccept, SIGNAL(triggered()), m_dialog, SLOT(accept()));
 
+        // workaround for #21 - since QWidget is now merely bitrot, QDialog closes,
+        // but does not reject on the escape key (unlike announced in the specific section of the API)
+        QAction *shortReject = new QAction(m_dialog);
+        m_dialog->addAction(shortReject);
+        shortReject->setShortcut(QKeySequence(Qt::Key_Escape));
+        connect (shortReject, SIGNAL(triggered()), m_dialog, SLOT(reject()));
+
         if (!m_size.isNull()) {
             m_dialog->adjustSize();
             QSize sz = m_dialog->size();
