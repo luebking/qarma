@@ -339,7 +339,9 @@ void Qarma::dialogFinished(int status)
         QVariantList l;
         for (int i = 0; i < dlg->sidebarUrls().count(); ++i)
             l << dlg->sidebarUrls().at(i);
-        QSettings("qarma").setValue("Bookmarks", l);
+        QSettings settings("qarma");
+        settings.setValue("Bookmarks", l);
+        settings.setValue("FileDetails", dlg->viewMode() == QFileDialog::Detail);
     }
 
     if (!(status == QDialog::Accepted || status == QMessageBox::Ok)) {
@@ -638,10 +640,12 @@ char Qarma::showMessage(const QStringList &args, char type)
 char Qarma::showFileSelection(const QStringList &args)
 {
     QFileDialog *dlg = new QFileDialog;
+    QSettings settings("qarma");
+    dlg->setViewMode(settings.value("FileDetails", false).toBool() ? QFileDialog::Detail : QFileDialog::List);
     dlg->setFileMode(QFileDialog::ExistingFile);
     dlg->setOption(QFileDialog::DontConfirmOverwrite, false);
     dlg->setProperty("qarma_separator", "|");
-    QVariantList l = QSettings("qarma").value("Bookmarks").toList();
+    QVariantList l = settings.value("Bookmarks").toList();
     QList<QUrl> bookmarks;
     for (int i = 0; i < l.count(); ++i)
         bookmarks << l.at(i).toUrl();
