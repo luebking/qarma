@@ -344,7 +344,7 @@ void Qarma::dialogFinished(int status)
         settings.setValue("FileDetails", dlg->viewMode() == QFileDialog::Detail);
     }
 
-    if (!(status == QDialog::Accepted || status == QMessageBox::Ok)) {
+    if (!(status == QDialog::Accepted || status == QMessageBox::Ok || status == QMessageBox::Yes)) {
 #ifdef Q_OS_UNIX
         if (sender()->property("qarma_autokill_parent").toBool()) {
             ::kill(getppid(), 15);
