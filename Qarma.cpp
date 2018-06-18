@@ -164,6 +164,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_type(Invalid)
 {
     QStringList argList = QCoreApplication::arguments(); // arguments() is slow
+    m_zenity = argList.at(0).endsWith("zenity");
     // make canonical list
     QStringList args;
     for (int i = 1; i < argList.count(); ++i) {
@@ -608,7 +609,7 @@ char Qarma::showMessage(const QStringList &args, char type)
     bool wrap = true, html = true;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--text")
-            dlg->setText(labelText(NEXT_ARG));
+            dlg->setText(html ? labelText(NEXT_ARG) : NEXT_ARG);
         else if (args.at(i) == "--icon-name")
             dlg->setIconPixmap(QIcon(NEXT_ARG).pixmap(64));
         else if (args.at(i) == "--no-wrap")
@@ -1247,9 +1248,34 @@ char Qarma::showForms(const QStringList &args)
 
 QString Qarma::labelText(const QString &s) const
 {
-//     if (m_zenity && Qt::mightBeRichText(s)) {
-//         return QString(s).replace("\\n", "<br>").replace(QRegExp("[^\\\\]\\\\t"), "&ensp;");
-//     }
+    // zenity uses pango markup, https://developer.gnome.org/pygtk/stable/pango-markup-language.html
+    // This near-html-subset isn't really compatible w/ Qt's html subset and we end up
+    // w/ a weird mix of ASCII escape codes and html tags
+    // the below is NOT a perfect translation
+
+    // known "caveats"
+    // pango termiantes the string for "\0" (we do not - atm)
+    // pango inserts some control char for "\f", but that's not reasonably handled by gtk label (so it's ignored here)
+    if (m_zenity) {
+        QString r = s;
+        // First replace backslashes with alarms to avoid false positives below.
+        // The alarm is treated as invalid and not supported by zenity/pango either
+        r.replace("\\\\", "\a") \
+         .replace("\\n", "<br>").replace("\\t", "&nbsp;&nbsp;&nbsp;") \
+         .replace("\\r", "<br>");
+        int idx = 0;
+        while (true) {
+            idx = r.indexOf(QRegExp("\\\\([0-9]{1,3})"), idx);
+            if (idx < 0)
+                break;
+            int sz = 0;
+            while (sz < 3 && r.at(idx+sz+1).isDigit())
+                ++sz;
+            r.replace(idx, sz+1, QChar(r.midRef(idx+1, sz).toUInt(nullptr, 8)));
+        }
+        r.remove("\\").replace(("\\a"), "\\");
+        return r;
+    }
     return s;
 }
 
