@@ -405,15 +405,15 @@ void Qarma::dialogFinished(int status)
             QTextEdit *te = sender()->findChild<QTextEdit*>();
             if (te && !te->isReadOnly()) {
                 printf("%s\n", qPrintable(te->toPlainText()));
-                break;
             }
+            break;
         }
         case Scale: {
             QSlider *sld = sender()->findChild<QSlider*>();
             if (sld) {
                 printf("%s\n", qPrintable(QString::number(sld->value())));
-                break;
             }
+            break;
         }
         case List: {
             QTreeWidget *tw = sender()->findChild<QTreeWidget*>();
