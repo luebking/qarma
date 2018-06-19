@@ -1273,7 +1273,7 @@ QString Qarma::labelText(const QString &s) const
                 ++sz;
             r.replace(idx, sz+1, QChar(r.midRef(idx+1, sz).toUInt(nullptr, 8)));
         }
-        r.remove("\\").replace(("\\a"), "\\");
+        r.remove("\\").replace(("\a"), "\\");
         return r;
     }
     return s;
