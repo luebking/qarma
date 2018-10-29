@@ -42,6 +42,7 @@
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QSettings>
 #include <QSlider>
 #include <QSocketNotifier>
 #include <QStringBuilder>
@@ -155,6 +156,7 @@ typedef QMap<QString, CategoryHelp> HelpDict;
 
 Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_modal(false)
+, m_selectableLabel(false)
 , m_parentWindow(0)
 , m_timeout(0)
 , m_notificationId(0)
@@ -162,6 +164,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_type(Invalid)
 {
     QStringList argList = QCoreApplication::arguments(); // arguments() is slow
+    m_zenity = argList.at(0).endsWith("zenity");
     // make canonical list
     QStringList args;
     for (int i = 1; i < argList.count(); ++i) {
@@ -256,6 +259,13 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         shortAccept->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Return));
         connect (shortAccept, SIGNAL(triggered()), m_dialog, SLOT(accept()));
 
+        // workaround for #21 - since QWidget is now merely bitrot, QDialog closes,
+        // but does not reject on the escape key (unlike announced in the specific section of the API)
+        QAction *shortReject = new QAction(m_dialog);
+        m_dialog->addAction(shortReject);
+        shortReject->setShortcut(QKeySequence(Qt::Key_Escape));
+        connect (shortReject, SIGNAL(triggered()), m_dialog, SLOT(reject()));
+
         if (!m_size.isNull()) {
             m_dialog->adjustSize();
             QSize sz = m_dialog->size();
@@ -325,7 +335,17 @@ static QString value(const QWidget *w, const QString &pattern)
 
 void Qarma::dialogFinished(int status)
 {
-    if (!(status == QDialog::Accepted || status == QMessageBox::Ok)) {
+    if (m_type == FileSelection) {
+        QFileDialog *dlg = static_cast<QFileDialog*>(sender());
+        QVariantList l;
+        for (int i = 0; i < dlg->sidebarUrls().count(); ++i)
+            l << dlg->sidebarUrls().at(i);
+        QSettings settings("qarma");
+        settings.setValue("Bookmarks", l);
+        settings.setValue("FileDetails", dlg->viewMode() == QFileDialog::Detail);
+    }
+
+    if (!(status == QDialog::Accepted || status == QMessageBox::Ok || status == QMessageBox::Yes)) {
 #ifdef Q_OS_UNIX
         if (sender()->property("qarma_autokill_parent").toBool()) {
             ::kill(getppid(), 15);
@@ -373,22 +393,27 @@ void Qarma::dialogFinished(int status)
             break;
         }
         case ColorSelection: {
-            printf("%s\n", qPrintable(static_cast<QColorDialog*>(sender())->selectedColor().name()));
+            QColorDialog *dlg = static_cast<QColorDialog*>(sender());
+            printf("%s\n", qPrintable(dlg->selectedColor().name()));
+            QVariantList l;
+            for (int i = 0; i < dlg->customCount(); ++i)
+                l << dlg->customColor(i).rgba();
+            QSettings("qarma").setValue("CustomPalette", l);
             break;
         }
         case TextInfo: {
             QTextEdit *te = sender()->findChild<QTextEdit*>();
             if (te && !te->isReadOnly()) {
                 printf("%s\n", qPrintable(te->toPlainText()));
-                break;
             }
+            break;
         }
         case Scale: {
             QSlider *sld = sender()->findChild<QSlider*>();
             if (sld) {
                 printf("%s\n", qPrintable(QString::number(sld->value())));
-                break;
             }
+            break;
         }
         case List: {
             QTreeWidget *tw = sender()->findChild<QTreeWidget*>();
@@ -470,7 +495,7 @@ bool Qarma::readGeneral(QStringList &args) {
             m_modal = true;
         } else if (args.at(i) == "--attach") {
             bool ok;
-            const int w = NEXT_ARG.toUInt(&ok);
+            const int w = NEXT_ARG.toUInt(&ok, 0);
             if (!ok)
                 return !error("--attach must be followed by a positive number");
             m_parentWindow = w;
@@ -578,13 +603,13 @@ char Qarma::showPassword(const QStringList &args)
 char Qarma::showMessage(const QStringList &args, char type)
 {
     QMessageBox *dlg = new QMessageBox;
-    dlg->setStandardButtons((type == 'q') ? QMessageBox::Ok|QMessageBox::Cancel : QMessageBox::Ok);
+    dlg->setStandardButtons((type == 'q') ? QMessageBox::Yes|QMessageBox::No : QMessageBox::Ok);
     dlg->setDefaultButton(QMessageBox::Ok);
 
     bool wrap = true, html = true;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--text")
-            dlg->setText(labelText(NEXT_ARG));
+            dlg->setText(html ? labelText(NEXT_ARG) : NEXT_ARG);
         else if (args.at(i) == "--icon-name")
             dlg->setIconPixmap(QIcon(NEXT_ARG).pixmap(64));
         else if (args.at(i) == "--no-wrap")
@@ -593,6 +618,8 @@ char Qarma::showMessage(const QStringList &args, char type)
             html = false;
         else if (args.at(i) == "--default-cancel")
             dlg->setDefaultButton(QMessageBox::Cancel);
+        else if (args.at(i) == "--selectable-labels")
+            m_selectableLabel = true;
         else if (args.at(i).startsWith("--") && args.at(i) != "--info" && args.at(i) != "--question" &&
                                                 args.at(i) != "--warning" && args.at(i) != "--error")
             qDebug() << "unspecific argument" << args.at(i);
@@ -600,6 +627,8 @@ char Qarma::showMessage(const QStringList &args, char type)
     if (QLabel *l = dlg->findChild<QLabel*>("qt_msgbox_label")) {
         l->setWordWrap(wrap);
         l->setTextFormat(html ? Qt::RichText : Qt::PlainText);
+        if (m_selectableLabel)
+            l->setTextInteractionFlags(l->textInteractionFlags()|Qt::TextSelectableByMouse);
     }
     if (dlg->iconPixmap().isNull())
         dlg->setIcon(type == 'w' ? QMessageBox::Warning :
@@ -612,9 +641,18 @@ char Qarma::showMessage(const QStringList &args, char type)
 char Qarma::showFileSelection(const QStringList &args)
 {
     QFileDialog *dlg = new QFileDialog;
+    QSettings settings("qarma");
+    dlg->setViewMode(settings.value("FileDetails", false).toBool() ? QFileDialog::Detail : QFileDialog::List);
     dlg->setFileMode(QFileDialog::ExistingFile);
     dlg->setOption(QFileDialog::DontConfirmOverwrite, false);
     dlg->setProperty("qarma_separator", "|");
+    QVariantList l = settings.value("Bookmarks").toList();
+    QList<QUrl> bookmarks;
+    for (int i = 0; i < l.count(); ++i)
+        bookmarks << l.at(i).toUrl();
+    if (!bookmarks.isEmpty())
+        dlg->setSidebarUrls(bookmarks);
+    QStringList mimeFilters;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--filename")
             dlg->selectFile(NEXT_ARG);
@@ -623,16 +661,19 @@ char Qarma::showFileSelection(const QStringList &args)
         else if (args.at(i) == "--directory") {
             dlg->setFileMode(QFileDialog::Directory);
             dlg->setOption(QFileDialog::ShowDirsOnly);
-        } else if (args.at(i) == "--save")
+        } else if (args.at(i) == "--save") {
             dlg->setFileMode(QFileDialog::AnyFile);
+            dlg->setAcceptMode(QFileDialog::AcceptSave);
+        }
         else if (args.at(i) == "--separator")
             dlg->setProperty("qarma_separator", NEXT_ARG);
         else if (args.at(i) == "--confirm-overwrite")
             dlg->setOption(QFileDialog::DontConfirmOverwrite);
         else if (args.at(i) == "--file-filter")
-            dlg->setNameFilters(NEXT_ARG.split(" "));
+            mimeFilters << NEXT_ARG.split(" ");
         else { WARN_UNKNOWN_ARG("--file-selection") }
     }
+    dlg->setNameFilters(mimeFilters);
     SHOW_DIALOG
     return 0;
 }
@@ -691,7 +732,7 @@ char Qarma::showList(const QStringList &args)
         else if (args.at(i) == "--hide-column") {
             int v = NEXT_ARG.toInt(&ok);
             if (ok)
-                hiddenCols << v;
+                hiddenCols << v-1;
         } else if (args.at(i) == "--print-column") {
             qWarning("TODO: --print-column");
         } else if (args.at(i) == "--checklist") {
@@ -779,6 +820,8 @@ void Qarma::notify(const QString message, bool noClose)
         dlg->setWindowOpacity(0.8);
         if (QLabel *l = dlg->findChild<QLabel*>("qt_msgbox_label")) {
             l->setWordWrap(true);
+            if (m_selectableLabel)
+                l->setTextInteractionFlags(l->textInteractionFlags()|Qt::TextSelectableByMouse);
         }
     }
     dlg->setText(labelText(message));
@@ -799,6 +842,8 @@ char Qarma::showNotification(const QStringList &args)
             listenToStdIn();
         } else if (args.at(i) == "--hint") {
             m_notificationHints = NEXT_ARG;
+        } else if (args.at(i) == "--selectable-labels") {
+            m_selectableLabel = true;
         } else { WARN_UNKNOWN_ARG("--notification") }
     }
     if (!message.isEmpty())
@@ -860,7 +905,8 @@ void Qarma::readStdIn()
         const int oldValue = dlg->value();
         bool ok;
         foreach (QString line, input) {
-            int u = line.toInt(&ok);
+            static QRegExp nondigit("[^0-9]");
+            int u = line.section(nondigit,0,0).toInt(&ok);
             if (ok)
                 dlg->setValue(qMin(100,u));
         }
@@ -1084,6 +1130,9 @@ char Qarma::showText(const QStringList &args)
 char Qarma::showColorSelection(const QStringList &args)
 {
     QColorDialog *dlg = new QColorDialog;
+    QVariantList l = QSettings("qarma").value("CustomPalette").toList();
+    for (int i = 0; i < l.count() && i < dlg->customCount(); ++i)
+        dlg->setCustomColor(i, QColor(l.at(i).toUInt()));
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--color") {
             dlg->setCurrentColor(QColor(NEXT_ARG));
@@ -1199,9 +1248,34 @@ char Qarma::showForms(const QStringList &args)
 
 QString Qarma::labelText(const QString &s) const
 {
-//     if (m_zenity && Qt::mightBeRichText(s)) {
-//         return QString(s).replace("\\n", "<br>").replace(QRegExp("[^\\\\]\\\\t"), "&ensp;");
-//     }
+    // zenity uses pango markup, https://developer.gnome.org/pygtk/stable/pango-markup-language.html
+    // This near-html-subset isn't really compatible w/ Qt's html subset and we end up
+    // w/ a weird mix of ASCII escape codes and html tags
+    // the below is NOT a perfect translation
+
+    // known "caveats"
+    // pango termiantes the string for "\0" (we do not - atm)
+    // pango inserts some control char for "\f", but that's not reasonably handled by gtk label (so it's ignored here)
+    if (m_zenity) {
+        QString r = s;
+        // First replace backslashes with alarms to avoid false positives below.
+        // The alarm is treated as invalid and not supported by zenity/pango either
+        r.replace("\\\\", "\a") \
+         .replace("\\n", "<br>").replace("\\t", "&nbsp;&nbsp;&nbsp;") \
+         .replace("\\r", "<br>");
+        int idx = 0;
+        while (true) {
+            idx = r.indexOf(QRegExp("\\\\([0-9]{1,3})"), idx);
+            if (idx < 0)
+                break;
+            int sz = 0;
+            while (sz < 3 && r.at(idx+sz+1).isDigit())
+                ++sz;
+            r.replace(idx, sz+1, QChar(r.midRef(idx+1, sz).toUInt(nullptr, 8)));
+        }
+        r.remove("\\").replace(("\a"), "\\");
+        return r;
+    }
     return s;
 }
 
@@ -1256,12 +1330,14 @@ void Qarma::printHelp(const QString &category)
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
-                            Help("--no-markup", tr("Do not enable html markup")));
+                            Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["info"] = CategoryHelp(tr("Info options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
-                            Help("--no-markup", tr("Do not enable html markup")));
+                            Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["file-selection"] = CategoryHelp(tr("File selection options"), HelpList() <<
                             Help("--filename=FILENAME", tr("Set the filename")) <<
                             Help("--multiple", tr("Allow multiple files to be selected")) <<
@@ -1285,7 +1361,8 @@ void Qarma::printHelp(const QString &category)
         helpDict["notification"] = CategoryHelp(tr("Notification icon options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--listen", tr("Listen for commands on stdin")) <<
-                            Help("--hint=TEXT", tr("Set the notification hints")));
+                            Help("--hint=TEXT", tr("Set the notification hints")) <<
+                            Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["progress"] = CategoryHelp(tr("Progress options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--percentage=PERCENTAGE", tr("Set initial percentage")) <<
@@ -1298,12 +1375,14 @@ void Qarma::printHelp(const QString &category)
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
-                            Help("--default-cancel", tr("Give cancel button focus by default")));
+                            Help("--default-cancel", tr("Give cancel button focus by default")) <<
+                            Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["warning"] = CategoryHelp(tr("Warning options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
-                            Help("--no-markup", tr("Do not enable html markup")));
+                            Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["scale"] = CategoryHelp(tr("Scale options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--value=VALUE", tr("Set initial value")) <<
