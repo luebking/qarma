@@ -45,13 +45,16 @@
 #include <QSettings>
 #include <QSlider>
 #include <QSocketNotifier>
-#include <QStringBuilder>
 #include <QStringList>
 #include <QTextEdit>
 #include <QTimer>
 #include <QTimerEvent>
 #include <QTreeWidget>
-#include <QTreeWidgetItem>
+#include <QUrl>
+
+#ifdef QT_USE_QSTRINGBUILDER
+#include <QStringBuilder>
+#endif
 
 #if QT_VERSION >= 0x050000
 // this is to hack access to the --title parameter in Qt5
@@ -394,10 +397,15 @@ void Qarma::dialogFinished(int status)
         }
         case ColorSelection: {
             QColorDialog *dlg = static_cast<QColorDialog*>(sender());
-            printf("%s\n", qPrintable(dlg->selectedColor().name()));
+            printf("%s\n", qPrintable(dlg->currentColor().name()));
             QVariantList l;
-            for (int i = 0; i < dlg->customCount(); ++i)
+            for (int i = 0; i < dlg->customCount(); ++i) {
+#if QT_VERSION >= 0x050000
                 l << dlg->customColor(i).rgba();
+#else
+                l << dlg->customColor(i);
+#endif
+            }
             QSettings("qarma").setValue("CustomPalette", l);
             break;
         }
@@ -1131,8 +1139,14 @@ char Qarma::showColorSelection(const QStringList &args)
 {
     QColorDialog *dlg = new QColorDialog;
     QVariantList l = QSettings("qarma").value("CustomPalette").toList();
-    for (int i = 0; i < l.count() && i < dlg->customCount(); ++i)
-        dlg->setCustomColor(i, QColor(l.at(i).toUInt()));
+    for (int i = 0; i < l.count() && i < dlg->customCount(); ++i) {
+        QColor color(l.at(i).toUInt());
+#if QT_VERSION >= 0x050000
+        dlg->setCustomColor(i, color);
+#else
+        dlg->setCustomColor(i, color.rgba());
+#endif
+    }
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--color") {
             dlg->setCurrentColor(QColor(NEXT_ARG));
@@ -1271,7 +1285,11 @@ QString Qarma::labelText(const QString &s) const
             int sz = 0;
             while (sz < 3 && r.at(idx+sz+1).isDigit())
                 ++sz;
+#if QT_VERSION >= 0x050000
             r.replace(idx, sz+1, QChar(r.midRef(idx+1, sz).toUInt(nullptr, 8)));
+#else
+            r.replace(idx, sz+1, QChar(r.mid(idx+1, sz).toUInt(nullptr, 8)));
+#endif
         }
         r.remove("\\").replace(("\a"), "\\");
         return r;

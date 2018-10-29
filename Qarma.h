@@ -19,11 +19,10 @@
 #ifndef QARMA_H
 #define QARMA_H
 
-class QDialog;
-class QTreeWidgetItem;
-
 #include <QApplication>
 #include <QPair>
+#include <QDialog>
+#include <QTreeWidgetItem>
 
 class Qarma : public QApplication
 {
