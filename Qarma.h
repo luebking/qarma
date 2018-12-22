@@ -49,9 +49,9 @@ private:
     char showColorSelection(const QStringList &args);
     char showForms(const QStringList &args);
     bool readGeneral(QStringList &args);
-    bool error(const QString message);
+    bool error(const QString& message);
     void listenToStdIn();
-    void notify(const QString message, bool noClose = false);
+    void notify(const QString& message, bool noClose = false);
 
     QString labelText(const QString &s) const; // m_zenity requires \n and \t interpretation in html.
 private slots:
