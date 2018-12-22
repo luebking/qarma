@@ -68,7 +68,7 @@
 class InputGuard : public QObject
 {
 public:
-    InputGuard() : QObject(), m_guardedWidget(NULL), m_checkTimer(0) {}
+    InputGuard() : QObject(), m_guardedWidget(nullptr), m_checkTimer(0) {}
     static void watch(QWidget *w) {
 #if QT_VERSION >= 0x050000
         if (qApp->platformName() == "wayland")
@@ -132,7 +132,7 @@ private:
         Q_ASSERT(m_guardedWidget == w);
         killTimer(m_checkTimer);
         m_checkTimer = 0;
-        m_guardedWidget = NULL;
+        m_guardedWidget = nullptr;
         w->releaseKeyboard();
     }
 private:
@@ -141,7 +141,7 @@ private:
     static InputGuard *s_instance;
 };
 
-InputGuard *InputGuard::s_instance = NULL;
+InputGuard *InputGuard::s_instance = nullptr;
 
 #ifdef WS_X11
 #include <QX11Info>
@@ -160,7 +160,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_parentWindow(0)
 , m_timeout(0)
 , m_notificationId(0)
-, m_dialog(NULL)
+, m_dialog(nullptr)
 , m_type(Invalid)
 {
     QStringList argList = QCoreApplication::arguments(); // arguments() is slow
@@ -573,7 +573,7 @@ char Qarma::showPassword(const QStringList &args)
 {
     NEW_DIALOG
 
-    QLineEdit *username(NULL), *password(NULL);
+    QLineEdit *username(nullptr), *password(nullptr);
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--username") {
             vl->addWidget(new QLabel(tr("Enter username"), dlg));
@@ -853,7 +853,7 @@ char Qarma::showNotification(const QStringList &args)
     return 0;
 }
 
-static QFile *gs_stdin = 0;
+static QFile *gs_stdin = nullptr;
 
 void Qarma::finishProgress()
 {
@@ -920,7 +920,7 @@ void Qarma::readStdIn()
     } else if (m_type == TextInfo) {
         if (QTextEdit *te = m_dialog->findChild<QTextEdit*>()) {
             cachedText += newText;
-            static QPropertyAnimation *animator = NULL;
+            static QPropertyAnimation *animator = nullptr;
             if (!animator || animator->state() != QPropertyAnimation::Running) {
                 const int oldValue = te->verticalScrollBar() ? te->verticalScrollBar()->value() : 0;
                 te->setText(te->toPlainText() + cachedText);
@@ -982,7 +982,7 @@ void Qarma::listenToStdIn()
         connect (snr, SIGNAL(activated(int)), SLOT(readStdIn()));
     } else {
         delete gs_stdin;
-        gs_stdin = NULL;
+        gs_stdin = nullptr;
     }
 }
 
@@ -1078,7 +1078,7 @@ char Qarma::showText(const QStringList &args)
     QTextEdit *te;
     vl->addWidget(te = new QTextEdit(dlg));
     te->setReadOnly(true);
-    QCheckBox *cb(NULL);
+    QCheckBox *cb(nullptr);
 
     bool needStdIn(true);
     for (int i = 0; i < args.count(); ++i) {
@@ -1178,7 +1178,7 @@ static void buildList(QTreeWidget **tree, QStringList &values, QStringList &colu
     values.clear();
     columns.clear();
     showHeader = false;
-    *tree = NULL;
+    *tree = nullptr;
 }
 
 char Qarma::showForms(const QStringList &args)
@@ -1195,10 +1195,10 @@ char Qarma::showForms(const QStringList &args)
     QFormLayout *fl;
     vl->addLayout(fl = new QFormLayout);
 
-    QTreeWidget *lastList = NULL;
+    QTreeWidget *lastList = nullptr;
     QStringList lastListValues, lastListColumns, lastComboValues;
     bool lastListHeader(false);
-    QComboBox *lastCombo = NULL;
+    QComboBox *lastCombo = nullptr;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--add-entry") {
             fl->addRow(NEXT_ARG, new QLineEdit(dlg));
@@ -1224,7 +1224,7 @@ char Qarma::showForms(const QStringList &args)
             if (lastCombo) {
                 lastCombo->addItems(lastComboValues);
                 lastComboValues.clear();
-                lastCombo = NULL;
+                lastCombo = nullptr;
             }
         } else if (args.at(i) == "--show-header") {
             lastListHeader = true;
