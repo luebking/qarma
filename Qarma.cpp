@@ -671,6 +671,8 @@ char Qarma::showFileSelection(const QStringList &args)
             dlg->setOption(QFileDialog::DontConfirmOverwrite);
         else if (args.at(i) == "--file-filter")
             mimeFilters << NEXT_ARG.split(" ");
+        else if (args.at(i) == "--initial")
+            dlg->setDirectory(NEXT_ARG);
         else { WARN_UNKNOWN_ARG("--file-selection") }
     }
     dlg->setNameFilters(mimeFilters);
@@ -1345,7 +1347,8 @@ void Qarma::printHelp(const QString &category)
                             Help("--save", tr("Activate save mode")) <<
                             Help("--separator=SEPARATOR", tr("Set output separator character")) <<
                             Help("--confirm-overwrite", tr("Confirm file selection if filename already exists")) <<
-                            Help("--file-filter=NAME | PATTERN1 PATTERN2 ...", tr("Sets a filename filter")));
+                            Help("--file-filter=NAME | PATTERN1 PATTERN2 ...", tr("Sets a filename filter")) <<
+                            Help("--initial=PATH", tr("Specify starting directory")));
         helpDict["list"] = CategoryHelp(tr("List options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--column=COLUMN", tr("Set the column header")) <<
