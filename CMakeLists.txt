@@ -21,7 +21,7 @@ set(QARMA_SOURCES
 
 add_executable(qarma ${QARMA_SOURCES})
 
-target_link_libraries(qarma ${QT_QTGUI_LIBRARY} ${QT_QTDBUS_LIBRARY})
+target_link_libraries(qarma ${QT_QTCORE_LIBRARY} ${QT_QTGUI_LIBRARY} ${QT_QTDBUS_LIBRARY})
 
 install(
     TARGETS qarma
