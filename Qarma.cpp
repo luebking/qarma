@@ -616,6 +616,8 @@ char Qarma::showMessage(const QStringList &args, char type)
             dlg->setIconPixmap(QIcon(NEXT_ARG).pixmap(64));
         else if (args.at(i) == "--no-wrap")
             wrap = false;
+        else if (args.at(i) == "--ellipsize")
+            wrap = true;
         else if (args.at(i) == "--no-markup")
             html = false;
         else if (args.at(i) == "--default-cancel")
@@ -1371,12 +1373,14 @@ void Qarma::printHelp(const QString &category)
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["info"] = CategoryHelp(tr("Info options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["file-selection"] = CategoryHelp(tr("File selection options"), HelpList() <<
                             Help("--filename=FILENAME", tr("Set the filename")) <<
@@ -1417,12 +1421,14 @@ void Qarma::printHelp(const QString &category)
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
                             Help("--default-cancel", tr("Give cancel button focus by default")) <<
+                            Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["warning"] = CategoryHelp(tr("Warning options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["scale"] = CategoryHelp(tr("Scale options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
