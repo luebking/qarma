@@ -678,8 +678,13 @@ char Qarma::showFileSelection(const QStringList &args)
             dlg->setProperty("qarma_separator", NEXT_ARG);
         else if (args.at(i) == "--confirm-overwrite")
             dlg->setOption(QFileDialog::DontConfirmOverwrite);
-        else if (args.at(i) == "--file-filter")
-            mimeFilters << NEXT_ARG.split(" ");
+        else if (args.at(i) == "--file-filter") {
+            QString mimeFilter = NEXT_ARG;
+            const int idx = mimeFilter.indexOf('|');
+            if (idx > -1)
+                mimeFilter = mimeFilter.left(idx).trimmed() + " (" + mimeFilter.mid(idx+1).trimmed() + ")";
+            mimeFilters << mimeFilter;
+        }
         else { WARN_UNKNOWN_ARG("--file-selection") }
     }
     dlg->setNameFilters(mimeFilters);
