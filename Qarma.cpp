@@ -36,11 +36,13 @@
 #include <QIcon>
 #include <QInputDialog>
 #include <QLabel>
+#include <QLocale>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QProgressDialog>
 #include <QPropertyAnimation>
 #include <QPushButton>
+#include <QScreen>
 #include <QScrollBar>
 #include <QSettings>
 #include <QSlider>
@@ -325,7 +327,7 @@ static QString value(const QWidget *w, const QString &pattern)
         return t->currentText();
     } else IF_IS(QCalendarWidget) {
         if (pattern.isNull())
-            return t->selectedDate().toString(Qt::SystemLocaleShortDate);
+            return QLocale::system().toString(t->selectedDate(), QLocale::ShortFormat);
         return t->selectedDate().toString(pattern);
     } else IF_IS(QCheckBox) {
         return t->isChecked() ? "true" : "false";
@@ -367,7 +369,7 @@ void Qarma::dialogFinished(int status)
             QString format = sender()->property("qarma_date_format").toString();
             QDate date = sender()->findChild<QCalendarWidget*>()->selectedDate();
             if (format.isEmpty())
-                printf("%s\n", qPrintable(date.toString(Qt::SystemLocaleShortDate)));
+                printf("%s\n", qPrintable(QLocale::system().toString(date, QLocale::ShortFormat)));
             else
                 printf("%s\n", qPrintable(date.toString(format)));
             break;
@@ -827,7 +829,7 @@ void Qarma::notify(const QString message, bool noClose)
     dlg->setText(labelText(message));
     SHOW_DIALOG
     dlg->adjustSize();
-    dlg->move(QApplication::desktop()->availableGeometry().topRight() - QPoint(dlg->width() + 20, -20));
+    dlg->move(QGuiApplication::screens().at(0)->availableGeometry().topRight() - QPoint(dlg->width() + 20, -20));
 }
 
 char Qarma::showNotification(const QStringList &args)
