@@ -936,10 +936,14 @@ void Qarma::readStdIn()
         const int oldValue = dlg->value();
         bool ok;
         foreach (QString line, input) {
-            static QRegExp nondigit("[^0-9]");
-            int u = line.section(nondigit,0,0).toInt(&ok);
-            if (ok)
-                dlg->setValue(qMin(100,u));
+            if (line.startsWith('#')) {
+                dlg->setLabelText(line.mid(1));
+            } else {
+                static QRegExp nondigit("[^0-9]");
+                int u = line.section(nondigit,0,0).toInt(&ok);
+                if (ok)
+                    dlg->setValue(qMin(100,u));
+            }
         }
         if (dlg->value() == 100) {
             finishProgress();
@@ -1393,7 +1397,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--editable", tr("Allow changes to text")) <<
                             Help("--print-column=NUMBER", tr("Print a specific column (Default is 1. 'ALL' can be used to print all columns)")) <<
                             Help("--hide-column=NUMBER", tr("Hide a specific column")) <<
-                            Help("--hide-header", tr("Hides the column headers"))) <<
+                            Help("--hide-header", tr("Hides the column headers")) <<
                             Help("--mid-search", tr("Change list default search function searching for text in the middle, not on the beginning")));
         helpDict["notification"] = CategoryHelp(tr("Notification icon options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
