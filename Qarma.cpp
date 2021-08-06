@@ -699,6 +699,34 @@ void Qarma::toggleItems(QTreeWidgetItem *item, int column)
     recursion = false;
 }
 
+static void addItems(QTreeWidget *tw, QStringList &values, bool editable, bool checkable, bool icons)
+{
+    for (int i = 0; i < values.count(); ) {
+        QStringList itemValues;
+        for (int j = 0; j < tw->columnCount(); ++j) {
+            itemValues << values.at(i++);
+            if (i == values.count())
+                break;
+        }
+        QTreeWidgetItem *item = new QTreeWidgetItem(tw, itemValues);
+        Qt::ItemFlags flags = item->flags();
+        if (editable)
+            flags |= Qt::ItemIsEditable;
+        if (checkable) {
+            flags |= Qt::ItemIsUserCheckable;
+            item->setCheckState(0, Qt::Unchecked);
+        }
+        if (icons)
+            item->setIcon(0, QPixmap(item->text(0)));
+        if (checkable || icons) {
+            item->setData(0, Qt::EditRole, item->text(0));
+            item->setText(0, QString());
+        }
+        item->setFlags(flags);
+        tw->addTopLevelItem(item);
+    }
+}
+
 char Qarma::showList(const QStringList &args)
 {
     NEW_DIALOG
@@ -763,9 +791,13 @@ char Qarma::showList(const QStringList &args)
             values << args.at(i);
         }
     }
+    if (values.isEmpty())
+        listenToStdIn();
 
     if (checkable)
         editable = false;
+
+    tw->setProperty("qarma_list_flags", int(editable | checkable << 1 | icons << 2));
 
     int columnCount = qMax(columns.count(), 1);
     tw->setColumnCount(columnCount);
@@ -773,30 +805,8 @@ char Qarma::showList(const QStringList &args)
     foreach (const int &i, hiddenCols)
         tw->setColumnHidden(i, true);
 
-    for (int i = 0; i < values.count(); ) {
-        QStringList itemValues;
-        for (int j = 0; j < columnCount; ++j) {
-            itemValues << values.at(i++);
-            if (i == values.count())
-                break;
-        }
-        QTreeWidgetItem *item = new QTreeWidgetItem(tw, itemValues);
-        Qt::ItemFlags flags = item->flags();
-        if (editable)
-            flags |= Qt::ItemIsEditable;
-        if (checkable) {
-            flags |= Qt::ItemIsUserCheckable;
-            item->setCheckState(0, Qt::Unchecked);
-        }
-        if (icons)
-            item->setIcon(0, QPixmap(item->text(0)));
-        if (checkable || icons) {
-            item->setData(0, Qt::EditRole, item->text(0));
-            item->setText(0, QString());
-        }
-        item->setFlags(flags);
-        tw->addTopLevelItem(item);
-    }
+    addItems(tw, values, editable, checkable, icons);
+
     if (exclusive) {
         connect (tw, SIGNAL(itemChanged(QTreeWidgetItem*, int)), SLOT(toggleItems(QTreeWidgetItem*, int)));
     }
@@ -909,8 +919,11 @@ void Qarma::readStdIn()
     }
 
     QStringList input;
-    if (m_type != TextInfo)
+    if (m_type != TextInfo) {
+        if (newText.endsWith('\n'))
+            newText.resize(newText.length()-1);
         input = newText.split('\n');
+    }
     if (m_type == Progress) {
         QProgressDialog *dlg = static_cast<QProgressDialog*>(m_dialog);
         if (dlg->maximum() == 0)
@@ -980,6 +993,11 @@ void Qarma::readStdIn()
         }
         if (userNeedsHelp)
             qDebug() << "icon: <filename>\nmessage: <UTF-8 encoded text>\ntooltip: <UTF-8 encoded text>\nvisible: <true|false>";
+    } else if (m_type == List) {
+        if (QTreeWidget *tw = m_dialog->findChild<QTreeWidget*>()) {
+            const int twflags = tw->property("qarma_list_flags").toInt();
+            addItems(tw, input, twflags & 1, twflags & 1<<1, twflags & 1<<2);
+        }
     }
     if (notifier)
         notifier->setEnabled(true);
