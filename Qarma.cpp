@@ -933,8 +933,7 @@ void Qarma::readStdIn()
     }
     if (m_type == Progress) {
         QProgressDialog *dlg = static_cast<QProgressDialog*>(m_dialog);
-        if (dlg->maximum() == 0)
-            return; // no input for pulsating progress
+
         const int oldValue = dlg->value();
         bool ok;
         foreach (QString line, input) {
@@ -947,12 +946,26 @@ void Qarma::readStdIn()
                     dlg->setValue(qMin(100,u));
             }
         }
+
+        if (dlg->maximum() == 0)
+            return; // we just need the label support
+
         if (dlg->value() == 100) {
             finishProgress();
         } else if (oldValue == 100) {
             disconnect (dlg, SIGNAL(canceled()), dlg, SLOT(accept()));
             connect (dlg, SIGNAL(canceled()), dlg, SLOT(reject()));
             dlg->setCancelButtonText(m_cancel.isNull() ? tr("Cancel") : m_cancel);
+        } else if (dlg->property("qarma_eta").toBool()) {
+            static QDateTime starttime;
+            if (starttime.isNull()) {
+                starttime = QDateTime::currentDateTime();
+            } else if (dlg->value() > 0) {
+                const qint64 secs = starttime.secsTo(QDateTime::currentDateTime());
+                QString eta = QTime(0,0,0).addSecs(100 * secs / dlg->value() - secs).toString();
+                foreach (QWidget *w, dlg->findChildren<QWidget*>())
+                    w->setToolTip(eta);
+            }
         }
     } else if (m_type == TextInfo) {
         if (QTextEdit *te = m_dialog->findChild<QTextEdit*>()) {
@@ -1046,7 +1059,10 @@ char Qarma::showProgress(const QStringList &args)
         else if (args.at(i) == "--no-cancel") {
             if (QPushButton *btn = dlg->findChild<QPushButton*>())
                 btn->hide();
-        } else { WARN_UNKNOWN_ARG("--progress") }
+        } else if (args.at(i) == "--time-remaining") {
+            dlg->setProperty("qarma_eta", true);
+        }
+        else { WARN_UNKNOWN_ARG("--progress") }
     }
 
     listenToStdIn();
