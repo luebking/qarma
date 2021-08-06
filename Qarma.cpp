@@ -713,7 +713,7 @@ char Qarma::showList(const QStringList &args)
     tw->setRootIsDecorated(false);
     tw->setAllColumnsShowFocus(true);
 
-    bool editable(false), checkable(false), exclusive(false), icons(false), ok;
+    bool editable(false), checkable(false), exclusive(false), icons(false), ok, needFilter(true);
     QStringList columns;
     QStringList values;
     QList<int> hiddenCols;
@@ -748,6 +748,17 @@ char Qarma::showList(const QStringList &args)
             exclusive = true;
         } else if (args.at(i) == "--imagelist") {
             icons = true;
+        } else if (args.at(i) == "--mid-search") {
+            if (needFilter) {
+                needFilter = false;
+                QLineEdit *filter;
+                vl->addWidget(filter = new QLineEdit(dlg));
+                filter->setPlaceholderText(tr("Filter"));
+                connect (filter, &QLineEdit::textChanged, this, [=](const QString &match){
+                    for (int i = 0; i < tw->topLevelItemCount(); ++i)
+                        tw->topLevelItem(i)->setHidden(!tw->topLevelItem(i)->text(0).contains(match, Qt::CaseInsensitive));
+                });
+            }
         } else if (args.at(i) != "--list") {
             values << args.at(i);
         }
