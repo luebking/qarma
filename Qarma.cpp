@@ -910,11 +910,13 @@ void Qarma::finishProgress()
 
 void Qarma::readStdIn()
 {
+    if (!gs_stdin->isOpen())
+        return;
     QSocketNotifier *notifier = qobject_cast<QSocketNotifier*>(sender());
     if (notifier)
         notifier->setEnabled(false);
 
-    QByteArray ba = gs_stdin->readLine();
+    QByteArray ba = m_type == TextInfo ? gs_stdin->readAll() : gs_stdin->readLine();
     if (ba.isEmpty() && notifier) {
         gs_stdin->close();
 //         gs_stdin->deleteLater(); // hello segfault...
@@ -979,7 +981,10 @@ void Qarma::readStdIn()
             static QPropertyAnimation *animator = NULL;
             if (!animator || animator->state() != QPropertyAnimation::Running) {
                 const int oldValue = te->verticalScrollBar() ? te->verticalScrollBar()->value() : 0;
-                te->setPlainText(te->toPlainText() + cachedText);
+                if (te->property("qarma_html").toBool())
+                    te->setHtml(te->toHtml() + cachedText);
+                else
+                    te->setPlainText(te->toPlainText() + cachedText);
                 cachedText.clear();
                 if (te->verticalScrollBar() && te->property("qarma_autoscroll").toBool()) {
                     te->verticalScrollBar()->setValue(oldValue);
