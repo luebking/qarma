@@ -39,6 +39,7 @@
 #include <QLocale>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QProcess>
 #include <QProgressDialog>
 #include <QPropertyAnimation>
 #include <QPushButton>
@@ -1145,11 +1146,15 @@ char Qarma::showText(const QStringList &args)
     QCheckBox *cb(NULL);
 
     QString filename;
-    bool html(false), plain(false), onlyMarkup(false);
+    bool html(false), plain(false), onlyMarkup(false), url(false);
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--filename") {
             filename = NEXT_ARG;
-        } else if (args.at(i) == "--editable")
+        } else if (args.at(i) == "--url") {
+            filename = NEXT_ARG;
+            url = true;
+        }
+        else if (args.at(i) == "--editable")
             te->setReadOnly(false);
         else if (args.at(i) == "--font") {
             te->setFont(QFont(NEXT_ARG));
@@ -1185,6 +1190,13 @@ char Qarma::showText(const QStringList &args)
 
     if (filename.isNull()) {
         listenToStdIn();
+    } else if (url) {
+        QProcess *curl = new QProcess;
+        connect(curl, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), [=]() {
+            te->setText(QString::fromLocal8Bit(curl->readAllStandardOutput()));
+            delete curl;
+        });
+        curl->start("curl", QStringList() << "-L" << filename);
     } else {
         QFile file(filename);
         if (file.open(QIODevice::ReadOnly)) {
@@ -1487,7 +1499,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--plain", "QARMA ONLY! " + tr("Force plain text, zenity default limitation")) <<
                             Help("--html", tr("Enable HTML support")) <<
                             Help("--no-interaction", tr("Do not enable user interaction with the WebView. Only works if you use --html option")) <<
-                            Help("--url=URL", "UNSUPPORTED! " + tr("Set an URL instead of a file. Only works if you use --html option")) <<
+                            Help("--url=URL", "REQUIRES CURL BINARY! " + tr("Set an URL instead of a file. Only works if you use --html option")) <<
                             Help("--auto-scroll", tr("Auto scroll the text to the end. Only when text is captured from stdin")));
         helpDict["color-selection"] = CategoryHelp(tr("Color selection options"), HelpList() <<
                             Help("--color=VALUE", tr("Set the color")) <<
