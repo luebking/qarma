@@ -1550,6 +1550,16 @@ void Qarma::printHelp(const QString &category)
                             Help("--display=DISPLAY", tr("X display to use")));
     }
 
+    if (category == "all") {
+        foreach(const CategoryHelp &el, helpDict) {
+            printf("%s\n", qPrintable(el.first));
+            foreach (const Help &help, el.second)
+                printf("  %-53s%s\n", qPrintable(help.first), qPrintable(help.second));
+            printf("\n");
+        }
+        return;
+    }
+
     HelpDict::const_iterator it = helpDict.constEnd();
     if (!category.isEmpty())
         it = helpDict.find(category);
