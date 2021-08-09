@@ -63,6 +63,8 @@
 
 #include <QtDebug>
 
+#include <cfloat>
+
 #ifdef Q_OS_UNIX
 #include <signal.h>
 #include <unistd.h>
@@ -376,7 +378,14 @@ void Qarma::dialogFinished(int status)
             break;
         }
         case Entry: {
-            printf("%s\n", qPrintable(static_cast<QInputDialog*>(sender())->textValue()));
+            QInputDialog *dlg = static_cast<QInputDialog*>(sender());
+            if (dlg->inputMode() == QInputDialog::DoubleInput) {
+                printf("%s\n", qPrintable(QLocale::c().toString(dlg->doubleValue(), 'f', 2)));
+            } else if (dlg->inputMode() == QInputDialog::IntInput) {
+                printf("%d\n", dlg->intValue());
+            } else {
+                printf("%s\n", qPrintable(dlg->textValue()));
+            }
             break;
         }
         case Password: {
@@ -565,6 +574,18 @@ char Qarma::showEntry(const QStringList &args)
             dlg->setTextValue(NEXT_ARG);
         else if (args.at(i) == "--hide-text")
             dlg->setTextEchoMode(QLineEdit::Password);
+        else if (args.at(i) == "--values") {
+            dlg->setComboBoxItems(NEXT_ARG.split('|'));
+            dlg->setComboBoxEditable(true);
+        } else if (args.at(i) == "--int") {
+            dlg->setInputMode(QInputDialog::IntInput);
+            dlg->setIntRange(INT_MIN, INT_MAX);
+            dlg->setIntValue(NEXT_ARG.toInt());
+        } else if (args.at(i) == "--float") {
+            dlg->setInputMode(QInputDialog::DoubleInput);
+            dlg->setDoubleRange(DBL_MIN, DBL_MAX);
+            dlg->setDoubleValue(NEXT_ARG.toDouble());
+        }
         else { WARN_UNKNOWN_ARG("--entry") }
     }
     SHOW_DIALOG
@@ -1425,7 +1446,10 @@ void Qarma::printHelp(const QString &category)
         helpDict["entry"] = CategoryHelp(tr("Text entry options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--entry-text=TEXT", tr("Set the entry text")) <<
-                            Help("--hide-text", tr("Hide the entry text")));
+                            Help("--hide-text", tr("Hide the entry text")) <<
+                            Help("--values=v1|v2|v3|…", "QARMA ONLY! " + tr("Offer preset values to pick from")) <<
+                            Help("--int=integer", "QARMA ONLY! " + tr("Integer input only, preset given value")) <<
+                            Help("--float=floating_point", "QARMA ONLY! " + tr("Floating point input only, preset given value")));
         helpDict["error"] = CategoryHelp(tr("Error options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
