@@ -1447,7 +1447,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--entry-text=TEXT", tr("Set the entry text")) <<
                             Help("--hide-text", tr("Hide the entry text")) <<
-                            Help("--values=v1|v2|v3|…", "QARMA ONLY! " + tr("Offer preset values to pick from")) <<
+                            Help("--values=v1|v2|v3|...", "QARMA ONLY! " + tr("Offer preset values to pick from")) <<
                             Help("--int=integer", "QARMA ONLY! " + tr("Integer input only, preset given value")) <<
                             Help("--float=floating_point", "QARMA ONLY! " + tr("Floating point input only, preset given value")));
         helpDict["error"] = CategoryHelp(tr("Error options"), HelpList() <<
