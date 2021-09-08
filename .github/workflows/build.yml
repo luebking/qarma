@@ -1,0 +1,32 @@
+on: [push, pull_request]
+name: build
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-18.04]
+      fail-fast: false
+
+    steps:
+      - name: Install dependencies
+        id: build_env
+        run: |
+          sudo apt update
+          sudo apt install qt5-default libqt5x11extras5-dev
+
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Configure and build
+        run: |
+          mkdir build && cd build
+          qmake .. && make
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: 'qarma-master'
+          path: |
+            build/qarma
