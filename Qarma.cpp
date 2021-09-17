@@ -1323,6 +1323,7 @@ char Qarma::showFontSelection(const QStringList &args)
 {
     QFontDialog *dlg = new QFontDialog;
     QString pattern = "%1-%2:%3:%4";
+    QString sample = "The quick brown fox jumps over the lazy dog";
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--type") {
             QStringList types = NEXT_ARG.split(',');
@@ -1340,8 +1341,12 @@ char Qarma::showFontSelection(const QStringList &args)
             pattern = NEXT_ARG;
             if (!pattern.contains("%1"))
                 qWarning("The output pattern doesn't include a placeholder for the font name...");
-        }{ WARN_UNKNOWN_ARG("--font-selection") }
+        } else if (args.at(i) == "--sample") {
+            sample = NEXT_ARG;
+        } { WARN_UNKNOWN_ARG("--font-selection") }
     }
+    if (QLineEdit *smpl = dlg->findChild<QLineEdit*>("qt_fontDialog_sampleEdit"))
+        smpl->setText(sample);
     dlg->setProperty("qarma_fontpattern", pattern);
     SHOW_DIALOG
     return 0;
@@ -1617,7 +1622,8 @@ void Qarma::printHelp(const QString &category)
                             Help("--custom-palette=path/to/some.gpl",  "QARMA ONLY! " + tr("Load a custom GPL for standard colors")));
         helpDict["font-selection"] = CategoryHelp(tr("Font selection options"), HelpList() <<
                             Help("--type=[vector][,bitmap][,fixed][,variable]", tr("Filter fonts (default: all)")) <<
-                            Help("--pattern=%1-%2:%3:%4", tr("Output pattern, %1: Name, %2: Size, %3: weight, %4: slant")));
+                            Help("--pattern=%1-%2:%3:%4", tr("Output pattern, %1: Name, %2: Size, %3: weight, %4: slant")) <<
+                            Help("--sample=TEXT", tr("Sample text, defaults to the foxdogthing")));
         helpDict["password"] = CategoryHelp(tr("Password dialog options"), HelpList() <<
                             Help("--username", tr("Display the username option")));
         helpDict["forms"] = CategoryHelp(tr("Forms dialog options"), HelpList() <<
