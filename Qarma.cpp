@@ -32,6 +32,7 @@
 #include <QDialogButtonBox>
 #include <QEvent>
 #include <QFileDialog>
+#include <QFontDialog>
 #include <QFormLayout>
 #include <QIcon>
 #include <QInputDialog>
@@ -230,6 +231,9 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         } else if (arg == "--color-selection") {
             m_type = ColorSelection;
             error = showColorSelection(args);
+        } else if (arg == "--font-selection") {
+            m_type = FontSelection;
+            error = showFontSelection(args);
         } else if (arg == "--password") {
             m_type = Password;
             error = showPassword(args);
@@ -411,6 +415,29 @@ void Qarma::dialogFinished(int status)
             for (int i = 0; i < dlg->customCount(); ++i)
                 l << dlg->customColor(i).rgba();
             QSettings("qarma").setValue("CustomPalette", l);
+            break;
+        }
+        case FontSelection: {
+            QFontDialog *dlg = static_cast<QFontDialog*>(sender());
+            QFont fnt = dlg->selectedFont();
+            int size = fnt.pointSize();
+            if (size < 0)
+                size = fnt.pixelSize();
+
+            // crude mapping of Qt's random enum to xft's random category
+            QString weight = "medium";
+            if (fnt.weight() < 35) weight = "light";
+            else if (fnt.weight() > 85) weight = "black";
+            else if (fnt.weight() > 70) weight = "bold";
+            else if (fnt.weight() > 60) weight = "demibold";
+
+            QString slant = "roman";
+            if (fnt.style() == QFont::StyleItalic) slant = "italic";
+            else if (fnt.style() == QFont::StyleOblique) slant = "oblique";
+
+            QString font = sender()->property("qarma_fontpattern").toString();
+            font = font.arg(fnt.family()).arg(size).arg(weight).arg(slant);
+            printf("%s\n", qPrintable(font));
             break;
         }
         case TextInfo: {
@@ -1292,6 +1319,34 @@ char Qarma::showColorSelection(const QStringList &args)
     return 0;
 }
 
+char Qarma::showFontSelection(const QStringList &args)
+{
+    QFontDialog *dlg = new QFontDialog;
+    QString pattern = "%1-%2:%3:%4";
+    for (int i = 0; i < args.count(); ++i) {
+        if (args.at(i) == "--type") {
+            QStringList types = NEXT_ARG.split(',');
+            QFontDialog::FontDialogOptions opts;
+            for (const QString &type : types) {
+                if (type == "vector")   opts |= QFontDialog::ScalableFonts;
+                if (type == "bitmap")   opts |= QFontDialog::NonScalableFonts;
+                if (type == "fixed")    opts |= QFontDialog::MonospacedFonts;
+                if (type == "variable") opts |= QFontDialog::ProportionalFonts;
+            }
+            if (opts) // https://bugreports.qt.io/browse/QTBUG-93473
+                dlg->setOptions(opts);
+            dlg->setCurrentFont(QFont()); // also works around the bug :P
+        } else if (args.at(i) == "--pattern") {
+            pattern = NEXT_ARG;
+            if (!pattern.contains("%1"))
+                qWarning("The output pattern doesn't include a placeholder for the font name...");
+        }{ WARN_UNKNOWN_ARG("--font-selection") }
+    }
+    dlg->setProperty("qarma_fontpattern", pattern);
+    SHOW_DIALOG
+    return 0;
+}
+
 static void buildList(QTreeWidget **tree, QStringList &values, QStringList &columns, bool &showHeader)
 {
     QTreeWidget *tw = *tree;
@@ -1560,6 +1615,9 @@ void Qarma::printHelp(const QString &category)
                             Help("--color=VALUE", tr("Set the color")) <<
                             Help("--show-palette", tr("Show the palette")) <<
                             Help("--custom-palette=path/to/some.gpl",  "QARMA ONLY! " + tr("Load a custom GPL for standard colors")));
+        helpDict["font-selection"] = CategoryHelp(tr("Font selection options"), HelpList() <<
+                            Help("--type=[vector][,bitmap][,fixed][,variable]", tr("Filter fonts (default: all)")) <<
+                            Help("--pattern=%1-%2:%3:%4", tr("Output pattern, %1: Name, %2: Size, %3: weight, %4: slant")));
         helpDict["password"] = CategoryHelp(tr("Password dialog options"), HelpList() <<
                             Help("--username", tr("Display the username option")));
         helpDict["forms"] = CategoryHelp(tr("Forms dialog options"), HelpList() <<
@@ -1596,6 +1654,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--scale", tr("Display scale dialog")) <<
                             Help("--text-info", tr("Display text information dialog")) <<
                             Help("--color-selection", tr("Display color selection dialog")) <<
+                            Help("--font-selection", "QARMA ONLY! " + tr("Display font selection dialog")) <<
                             Help("--password", tr("Display password dialog")) <<
                             Help("--forms", tr("Display forms dialog")) <<
                             Help("--display=DISPLAY", tr("X display to use")));
