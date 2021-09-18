@@ -625,16 +625,19 @@ char Qarma::showPassword(const QStringList &args)
     NEW_DIALOG
 
     QLineEdit *username(NULL), *password(NULL);
+    QString prompt = tr("Enter password");
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--username") {
             vl->addWidget(new QLabel(tr("Enter username"), dlg));
             vl->addWidget(username = new QLineEdit(dlg));
             username->setObjectName("qarma_username");
             break;
-        } else { WARN_UNKNOWN_ARG("--password") }
+        } else if (args.at(i) == "--prompt") {
+            prompt = NEXT_ARG;
+        } { WARN_UNKNOWN_ARG("--password") }
     }
 
-    vl->addWidget(new QLabel(tr("Enter password"), dlg));
+    vl->addWidget(new QLabel(prompt, dlg));
     vl->addWidget(password = new QLineEdit(dlg));
     password->setObjectName("qarma_password");
     password->setEchoMode(QLineEdit::Password);
@@ -1625,7 +1628,8 @@ void Qarma::printHelp(const QString &category)
                             Help("--pattern=%1-%2:%3:%4", tr("Output pattern, %1: Name, %2: Size, %3: weight, %4: slant")) <<
                             Help("--sample=TEXT", tr("Sample text, defaults to the foxdogthing")));
         helpDict["password"] = CategoryHelp(tr("Password dialog options"), HelpList() <<
-                            Help("--username", tr("Display the username option")));
+                            Help("--username", tr("Display the username option")) <<
+                            Help("--prompt=TEXT", "QARMA ONLY! " + tr("The prompt for the user")));
         helpDict["forms"] = CategoryHelp(tr("Forms dialog options"), HelpList() <<
                             Help("--add-entry=Field name", tr("Add a new Entry in forms dialog")) <<
                             Help("--add-password=Field name", tr("Add a new Password Entry in forms dialog")) <<
