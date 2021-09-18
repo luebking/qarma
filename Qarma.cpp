@@ -264,7 +264,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         // TODO: remove once this is fixed in Qt5
         QWindow *w = new QWindow;
         w->setVisible(true);
-        m_dialog->setWindowTitle(w->title());
+        m_caption = w->title();
         delete w;
 #endif
         // close on ctrl+return in addition to ctrl+enter
@@ -290,8 +290,21 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
             m_dialog->resize(sz);
         }
         m_dialog->setWindowModality(m_modal ? Qt::ApplicationModal : Qt::NonModal);
-        if (!m_caption.isNull())
-            m_dialog->setWindowTitle(m_caption);
+        if (!m_caption.isNull()) {
+//            QMetaObject::invokeMethod(this, [=]() {m_dialog->setWindowTitle(m_caption);}, Qt::QueuedConnection);
+            /*
+            Fuck! This! Shit!
+            There's somehow a race condition and QWindow happily resets the window
+            title to the process name, because reasons.
+            Funny enough, m_dialog->windowHandle() is visible at this time, so
+            catching that signal does jack shit and inb4 some smartass wants to
+            point out that singleShot(0) is cumbersome and wrong and one should
+            invoke a QueuedConnection method: no, that doesn't work either
+            (likely because Qt queues its title nukation efforts down the road)
+            But hey, abstract and wayland and QML… FUCK! THIS! SHIT! *grrrrrrrr*
+            */
+            QTimer::singleShot(10, this, [=]() {m_dialog->setWindowTitle(m_caption);});
+        }
         if (!m_icon.isNull())
             m_dialog->setWindowIcon(QIcon(m_icon));
         QDialogButtonBox *box = m_dialog->findChild<QDialogButtonBox*>();
