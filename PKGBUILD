@@ -22,6 +22,7 @@ package()
     mkdir -p $pkgdir/usr/bin
     install qarma $pkgdir/usr/bin
     strip $pkgdir/usr/bin/qarma
+    ln -s /usr/bin/qarma $pkgdir/usr/bin/qarma-askpass
 }
 
 # vim:set ts=2 sw=2 et:
