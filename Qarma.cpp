@@ -173,16 +173,21 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
     m_zenity = argList.at(0).endsWith("zenity");
     // make canonical list
     QStringList args;
-    for (int i = 1; i < argList.count(); ++i) {
-        if (argList.at(i).startsWith("--")) {
-            int split = argList.at(i).indexOf('=');
-            if (split > -1) {
-                args << argList.at(i).left(split) << argList.at(i).mid(split+1);
+    if (argList.at(0).endsWith("-askpass")) {
+        argList.removeFirst();
+        args << "--title" << tr("Enter Password") << "--password" << "--prompt" << argList.join(' ');
+    } else {
+        for (int i = 1; i < argList.count(); ++i) {
+            if (argList.at(i).startsWith("--")) {
+                int split = argList.at(i).indexOf('=');
+                if (split > -1) {
+                    args << argList.at(i).left(split) << argList.at(i).mid(split+1);
+                } else {
+                    args << argList.at(i);
+                }
             } else {
                 args << argList.at(i);
             }
-        } else {
-            args << argList.at(i);
         }
     }
     argList.clear();
