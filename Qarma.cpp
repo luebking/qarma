@@ -1296,6 +1296,14 @@ char Qarma::showText(const QStringList &args)
     return 0;
 }
 
+static QStringList splitSkipEmptyParts(const QString& str, const QRegularExpression& sep) {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+	return str.split(sep, Qt::SkipEmptyParts);
+#else
+	return str.split(sep, QString::SkipEmptyParts);
+#endif
+}
+
 char Qarma::showColorSelection(const QStringList &args)
 {
     QColorDialog *dlg = new QColorDialog;
@@ -1317,7 +1325,7 @@ char Qarma::showColorSelection(const QStringList &args)
                     int r, g, b; bool ok; int idx = 0;
                     for (const QString &line : pal) {
                         if (idx > 47) break; // sorry :(
-                        QStringList color = line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+                        QStringList color = splitSkipEmptyParts(line, QRegularExpression("\\s+"));
                         if (color.count() < 3) continue;
                         r = color.at(0).toInt(&ok); if (!ok) continue;
                         g = color.at(1).toInt(&ok); if (!ok) continue;
