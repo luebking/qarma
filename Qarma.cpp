@@ -71,6 +71,12 @@
 #include <unistd.h>
 #endif
 
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
+    #define SKIP_EMPTY Qt::SkipEmptyParts
+#else
+    #define SKIP_EMPTY QString::SkipEmptyParts
+#endif
+
 class InputGuard : public QObject
 {
 public:
@@ -1317,7 +1323,7 @@ char Qarma::showColorSelection(const QStringList &args)
                     int r, g, b; bool ok; int idx = 0;
                     for (const QString &line : pal) {
                         if (idx > 47) break; // sorry :(
-                        QStringList color = line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+                        QStringList color = line.split(QRegularExpression("\\s+"), SKIP_EMPTY);
                         if (color.count() < 3) continue;
                         r = color.at(0).toInt(&ok); if (!ok) continue;
                         g = color.at(1).toInt(&ok); if (!ok) continue;
