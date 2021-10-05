@@ -10,7 +10,6 @@ license=('GPL')
 depends=('qt5-base')
 makedepends=('git' 'gcc')
 provides=('zenity')
-conflicts=('zenity')
 
 pkgver()
 {
@@ -27,7 +26,6 @@ package()
 {
     install -Dm755 qarma -t "$pkgdir/usr/bin"
     ln -s /usr/bin/qarma "$pkgdir/usr/bin/qarma-askpass"
-    ln -s /usr/bin/qarma "$pkgdir/usr/bin/zenity"
 }
 
 # vim:set ts=2 sw=2 et:
