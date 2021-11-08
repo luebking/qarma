@@ -1500,7 +1500,8 @@ QString Qarma::labelText(const QString &s) const
          .replace("\\r", "<br>");
         int idx = 0;
         while (true) {
-            idx = r.indexOf(QRegExp("\\\\([0-9]{1,3})"), idx);
+            static const QRegularExpression octet("\\\\([0-9]{1,3})");
+            idx = r.indexOf(octet, idx);
             if (idx < 0)
                 break;
             int sz = 0;
