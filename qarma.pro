@@ -1,7 +1,9 @@
 HEADERS = Qarma.h
 SOURCES = Qarma.cpp
 QT      += dbus gui widgets
-unix:!macx:QT += x11extras
+lessThan(QT_MAJOR_VERSION, 6){
+  unix:!macx:QT += x11extras
+}
 TARGET  = qarma
 
 unix:!macx:LIBS    += -lX11

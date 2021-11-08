@@ -28,7 +28,6 @@
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusInterface>
-#include <QDesktopWidget>
 #include <QDialogButtonBox>
 #include <QEvent>
 #include <QFileDialog>
@@ -156,7 +155,11 @@ private:
 InputGuard *InputGuard::s_instance = NULL;
 
 #ifdef WS_X11
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+#include <QGuiApplication>
+#else
 #include <QX11Info>
+#endif
 #include <X11/Xlib.h>
 #endif
 
@@ -345,7 +348,13 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         if (m_parentWindow) {
 #ifdef WS_X11
             m_dialog->setAttribute(Qt::WA_X11BypassTransientForHint);
-            XSetTransientForHint(QX11Info::display(), m_dialog->winId(), m_parentWindow);
+            Display *dpy;
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+            dpy = QGuiApplication::nativeInterface<QX11Application*>()->display();
+#else
+            dpy = QX11Info::display();
+#endif
+            XSetTransientForHint(dpy, m_dialog->winId(), m_parentWindow);
 #endif
         }
     }
@@ -1526,7 +1535,7 @@ QString Qarma::labelText(const QString &s) const
             int sz = 0;
             while (sz < 3 && r.at(idx+sz+1).isDigit())
                 ++sz;
-            r.replace(idx, sz+1, QChar(r.midRef(idx+1, sz).toUInt(nullptr, 8)));
+            r.replace(idx, sz+1, QChar(r.mid(idx+1, sz).toUInt(nullptr, 8)));
         }
         r.remove("\\").replace(("\a"), "\\");
         return r;
