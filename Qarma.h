@@ -33,6 +33,7 @@ public:
     enum Type { Invalid, Calendar, Entry, Error, Info, FileSelection, List, Notification, Progress, Question, Warning,
                 Scale, TextInfo, ColorSelection, FontSelection, Password, Forms };
     static void printHelp(const QString &category = QString());
+    using  QApplication::notify;
 private:
     char showCalendar(const QStringList &args);
     char showEntry(const QStringList &args);
