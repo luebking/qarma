@@ -271,6 +271,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         QWindow *w = new QWindow;
         w->setVisible(true);
         m_caption = w->title();
+        m_dialog->setWindowTitle(m_caption);
         delete w;
 #endif
         // close on ctrl+return in addition to ctrl+enter
