@@ -176,7 +176,8 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_type(Invalid)
 {
     QStringList argList = QCoreApplication::arguments(); // arguments() is slow
-    m_zenity = argList.at(0).endsWith("zenity");
+    const QString binary = argList.at(0);
+    m_zenity = binary.endsWith("zenity");
     // make canonical list
     QStringList args;
     if (argList.at(0).endsWith("-askpass")) {
@@ -264,15 +265,26 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 
     if (m_dialog) {
 #if QT_VERSION >= 0x050000
-        // this hacks access to the --title parameter in Qt5
-        // for some reason it's not set on the dialog.
-        // since it's set on showing the first QWindow, we just create one here and copy the title
-        // TODO: remove once this is fixed in Qt5
-        QWindow *w = new QWindow;
-        w->setVisible(true);
-        m_caption = w->title();
+        /*  Stage #1 one of "Setting a window title should be easy but Qt5 is dumb"
+            Qt5 sucks away "--title foo" but not "--title=foo" and then stumbles
+            over itself when trying to set it
+            So #1 we seek to get ourselfs access to the window title to get some
+            control over it
+
+            since it's set on showing the first QWindow, we just create one here
+            and copy the title
+        */
+        /// @todo: remove once this is fixed in Qt5 - ie. "never"
+        const bool qt5title = m_caption.isNull(); // otherwise we read it in the general options
+        if (qt5title) {
+            QWindow *w = new QWindow;
+            w->setVisible(true);
+            m_caption = w->title();
+            delete w;
+            m_dialog->setWindowTitle("");
+        }
         m_dialog->setWindowTitle(m_caption);
-        delete w;
+        // so much for stage one, see below for more on Qt5 being dumb...
 #endif
         // close on ctrl+return in addition to ctrl+enter
         QAction *shortAccept = new QAction(m_dialog);
@@ -297,21 +309,28 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
             m_dialog->resize(sz);
         }
         m_dialog->setWindowModality(m_modal ? Qt::ApplicationModal : Qt::NonModal);
-        if (!m_caption.isNull()) {
-//            QMetaObject::invokeMethod(this, [=]() {m_dialog->setWindowTitle(m_caption);}, Qt::QueuedConnection);
-            /*
-            Fuck! This! Shit!
-            There's somehow a race condition and QWindow happily resets the window
-            title to the process name, because reasons.
-            Funny enough, m_dialog->windowHandle() is visible at this time, so
-            catching that signal does jack shit and inb4 some smartass wants to
-            point out that singleShot(0) is cumbersome and wrong and one should
-            invoke a QueuedConnection method: no, that doesn't work either
-            (likely because Qt queues its title nukation efforts down the road)
-            But hey, abstract and wayland and QML… FUCK! THIS! SHIT! *grrrrrrrr*
-            */
-            QTimer::singleShot(10, this, [=]() {m_dialog->setWindowTitle(m_caption);});
-        }
+        /*  Stage #2 one of "Setting a window title should be easy but Qt5 is dumb"
+            Errhemmm... Fuck! This! Shit!
+            Not only is Qt5 too dumb to set the window title by parameter, if one
+            does it, at least on X11 Qt5 doesn't set the property on the platform
+            window *before* mapping it, but *while* - causing an IPC race condition
+            with the WMs that will pick up the "old" title, but also miss the property
+            update because it can happen while they're configuring the window.
+            Awesome.
+            Because we can't retroactively preceed the mapping, we at least need to
+            make sure that the title gets updated after the window is mapped and
+            configured - what we can only guess witha timer... *grrrrr*
+            Since setting the same title is idempotent and skipped in ::setWindowTitle
+            (what would be great if the entire thing wasn't broken to begin with)
+            We need two steps to first clear and second reset the title - maximzing
+            the server roundtrips...
+            But hey, abstract and wayland and QML... FUCK! THIS! SHIT! *grrrrrrrr*
+        */
+        // We do this after the dialog creation, because the setup can take varying times
+        if (!(m_caption.isNull() || binary.endsWith(m_caption)))
+            QTimer::singleShot(10, this, [=]() {m_dialog->setWindowTitle(""); m_dialog->setWindowTitle(m_caption);});
+        // so much for setting the window title - despite Qt trying to do it by itself
+
         if (!m_icon.isNull())
             m_dialog->setWindowIcon(QIcon(m_icon));
         QDialogButtonBox *box = m_dialog->findChild<QDialogButtonBox*>();
