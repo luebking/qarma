@@ -289,7 +289,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         // close on ctrl+return in addition to ctrl+enter
         QAction *shortAccept = new QAction(m_dialog);
         m_dialog->addAction(shortAccept);
-        shortAccept->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Return));
+        shortAccept->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return));
         connect (shortAccept, SIGNAL(triggered()), m_dialog, SLOT(accept()));
 
         // workaround for #21 - since QWidget is now merely bitrot, QDialog closes,
