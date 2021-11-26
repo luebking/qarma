@@ -1617,7 +1617,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--separator=SEPARATOR", tr("Set output separator character")) <<
                             Help("--confirm-overwrite", tr("Confirm file selection if filename already exists")) <<
                             Help("--file-filter=NAME | PATTERN1 PATTERN2 ...", tr("Sets a filename filter")));
-        helpDict["list"] = CategoryHelp(tr("List options"), HelpList() <<
+        helpDict["list"] = CategoryHelp(tr("List Command\n  %1 --list [Options] [Item1 ...]\nList Options").arg(applicationName()), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--column=COLUMN", tr("Set the column header")) <<
                             Help("--checklist", tr("Use check boxes for first column")) <<
@@ -1755,6 +1755,8 @@ void Qarma::printHelp(const QString &category)
 
 int main (int argc, char **argv)
 {
+    if (argc > 0)
+        QCoreApplication::setApplicationName(argv[0]); // autoset my ass…
     if (argc < 2) {
         Qarma::printHelp();
         return 1;
