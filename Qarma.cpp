@@ -352,7 +352,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
             m_dialog->setAttribute(Qt::WA_X11BypassTransientForHint);
             Display *dpy;
 #if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
-            dpy = QGuiApplication::nativeInterface<QNativeInterface::QX11Application*>()->display();
+            dpy = QGuiApplication::nativeInterface<QNativeInterface::QX11Application>()->display();
 #else
             dpy = QX11Info::display();
 #endif
