@@ -9,5 +9,11 @@ TARGET  = qarma
 unix:!macx:LIBS    += -lX11
 unix:!macx:DEFINES += WS_X11
 
-target.path += /usr/bin
+# override: qmake PREFIX=/some/where/else
+isEmpty(PREFIX) {
+  PREFIX = /usr
+}
+
+target.path = $$PREFIX/bin
+
 INSTALLS += target
