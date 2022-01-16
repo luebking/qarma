@@ -1061,9 +1061,6 @@ void Qarma::readStdIn()
             }
         }
 
-        if (dlg->maximum() == 0)
-            return; // we just need the label support
-
         if (dlg->value() == 100) {
             finishProgress();
         } else if (oldValue == 100) {
