@@ -1,0 +1,13 @@
+/*build*
+*.user*
+Makefile
+moc_*
+pkg
+src
+qarma
+qarma-askpass
+zenity
+*.tar*
+*.stash
+*.o
+*.patch

@@ -28,26 +28,29 @@
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusInterface>
-#include <QDesktopWidget>
 #include <QDialogButtonBox>
 #include <QEvent>
 #include <QFileDialog>
+#include <QFontDialog>
 #include <QFormLayout>
 #include <QIcon>
 #include <QInputDialog>
 #include <QLabel>
+#include <QLocale>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QProcess>
 #include <QProgressDialog>
 #include <QPropertyAnimation>
 #include <QPushButton>
+#include <QScreen>
 #include <QScrollBar>
 #include <QSettings>
 #include <QSlider>
 #include <QSocketNotifier>
 #include <QStringBuilder>
 #include <QStringList>
-#include <QTextEdit>
+#include <QTextBrowser>
 #include <QTimer>
 #include <QTimerEvent>
 #include <QTreeWidget>
@@ -60,9 +63,17 @@
 
 #include <QtDebug>
 
+#include <cfloat>
+
 #ifdef Q_OS_UNIX
 #include <csignal>
 #include <unistd.h>
+#endif
+
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
+    #define SKIP_EMPTY Qt::SkipEmptyParts
+#else
+    #define SKIP_EMPTY QString::SkipEmptyParts
 #endif
 
 class InputGuard : public QObject
@@ -144,7 +155,11 @@ private:
 InputGuard *InputGuard::s_instance = nullptr;
 
 #ifdef WS_X11
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+#include <QGuiApplication>
+#else
 #include <QX11Info>
+#endif
 #include <X11/Xlib.h>
 #endif
 
@@ -164,19 +179,25 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_type(Invalid)
 {
     QStringList argList = QCoreApplication::arguments(); // arguments() is slow
-    m_zenity = argList.at(0).endsWith("zenity");
+    const QString binary = argList.at(0);
+    m_zenity = binary.endsWith("zenity");
     // make canonical list
     QStringList args;
-    for (int i = 1; i < argList.count(); ++i) {
-        if (argList.at(i).startsWith("--")) {
-            int split = argList.at(i).indexOf('=');
-            if (split > -1) {
-                args << argList.at(i).left(split) << argList.at(i).mid(split+1);
+    if (argList.at(0).endsWith("-askpass")) {
+        argList.removeFirst();
+        args << "--title" << tr("Enter Password") << "--password" << "--prompt" << argList.join(' ');
+    } else {
+        for (int i = 1; i < argList.count(); ++i) {
+            if (argList.at(i).startsWith("--")) {
+                int split = argList.at(i).indexOf('=');
+                if (split > -1) {
+                    args << argList.at(i).left(split) << argList.at(i).mid(split+1);
+                } else {
+                    args << argList.at(i);
+                }
             } else {
                 args << argList.at(i);
             }
-        } else {
-            args << argList.at(i);
         }
     }
     argList.clear();
@@ -225,6 +246,9 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         } else if (arg == "--color-selection") {
             m_type = ColorSelection;
             error = showColorSelection(args);
+        } else if (arg == "--font-selection") {
+            m_type = FontSelection;
+            error = showFontSelection(args);
         } else if (arg == "--password") {
             m_type = Password;
             error = showPassword(args);
@@ -244,19 +268,33 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 
     if (m_dialog) {
 #if QT_VERSION >= 0x050000
-        // this hacks access to the --title parameter in Qt5
-        // for some reason it's not set on the dialog.
-        // since it's set on showing the first QWindow, we just create one here and copy the title
-        // TODO: remove once this is fixed in Qt5
-        QWindow *w = new QWindow;
-        w->setVisible(true);
-        m_dialog->setWindowTitle(w->title());
-        delete w;
+        /*  Stage #1 one of "Setting a window title should be easy but Qt5 is dumb"
+            Qt5 sucks away "--title foo" but not "--title=foo" and then stumbles
+            over itself when trying to set it
+            So #1 we seek to get ourselfs access to the window title to get some
+            control over it
+
+            since it's set on showing the first QWindow, we just create one here
+            and copy the title
+        */
+        /// @todo: remove once this is fixed in Qt5 - ie. "never"
+        const bool qt5title = m_caption.isNull(); // otherwise we read it in the general options
+        if (qt5title) {
+            QWindow *w = new QWindow;
+            w->setVisible(true);
+            m_caption = w->title();
+            delete w;
+            m_dialog->setWindowTitle("");
+        }
+        m_dialog->setWindowTitle(m_caption);
+        // so much for stage one, see below for more on Qt5 being dumb...
 #endif
         // close on ctrl+return in addition to ctrl+enter
         QAction *shortAccept = new QAction(m_dialog);
         m_dialog->addAction(shortAccept);
-        shortAccept->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Return));
+        QList<QKeySequence> cuts;
+        cuts << QKeySequence(Qt::CTRL|Qt::Key_Return) << QKeySequence(Qt::CTRL|Qt::Key_Enter);
+        shortAccept->setShortcuts(cuts);
         connect (shortAccept, SIGNAL(triggered()), m_dialog, SLOT(accept()));
 
         // workaround for #21 - since QWidget is now merely bitrot, QDialog closes,
@@ -276,8 +314,28 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
             m_dialog->resize(sz);
         }
         m_dialog->setWindowModality(m_modal ? Qt::ApplicationModal : Qt::NonModal);
-        if (!m_caption.isNull())
-            m_dialog->setWindowTitle(m_caption);
+        /*  Stage #2 one of "Setting a window title should be easy but Qt5 is dumb"
+            Errhemmm... Fuck! This! Shit!
+            Not only is Qt5 too dumb to set the window title by parameter, if one
+            does it, at least on X11 Qt5 doesn't set the property on the platform
+            window *before* mapping it, but *while* - causing an IPC race condition
+            with the WMs that will pick up the "old" title, but also miss the property
+            update because it can happen while they're configuring the window.
+            Awesome.
+            Because we can't retroactively preceed the mapping, we at least need to
+            make sure that the title gets updated after the window is mapped and
+            configured - what we can only guess witha timer... *grrrrr*
+            Since setting the same title is idempotent and skipped in ::setWindowTitle
+            (what would be great if the entire thing wasn't broken to begin with)
+            We need two steps to first clear and second reset the title - maximzing
+            the server roundtrips...
+            But hey, abstract and wayland and QML... FUCK! THIS! SHIT! *grrrrrrrr*
+        */
+        // We do this after the dialog creation, because the setup can take varying times
+        if (!(m_caption.isNull() || binary.endsWith(m_caption)))
+            QTimer::singleShot(10, this, [=]() {m_dialog->setWindowTitle(""); m_dialog->setWindowTitle(m_caption);});
+        // so much for setting the window title - despite Qt trying to do it by itself
+
         if (!m_icon.isNull())
             m_dialog->setWindowIcon(QIcon(m_icon));
         QDialogButtonBox *box = m_dialog->findChild<QDialogButtonBox*>();
@@ -292,7 +350,13 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         if (m_parentWindow) {
 #ifdef WS_X11
             m_dialog->setAttribute(Qt::WA_X11BypassTransientForHint);
-            XSetTransientForHint(QX11Info::display(), m_dialog->winId(), m_parentWindow);
+            Display *dpy;
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+            dpy = QGuiApplication::nativeInterface<QNativeInterface::QX11Application>()->display();
+#else
+            dpy = QX11Info::display();
+#endif
+            XSetTransientForHint(dpy, m_dialog->winId(), m_parentWindow);
 #endif
         }
     }
@@ -325,7 +389,7 @@ static QString value(const QWidget *w, const QString &pattern)
         return t->currentText();
     } else IF_IS(QCalendarWidget) {
         if (pattern.isNull())
-            return t->selectedDate().toString(Qt::SystemLocaleShortDate);
+            return QLocale::system().toString(t->selectedDate(), QLocale::ShortFormat);
         return t->selectedDate().toString(pattern);
     } else IF_IS(QCheckBox) {
         return t->isChecked() ? "true" : "false";
@@ -367,13 +431,20 @@ void Qarma::dialogFinished(int status)
             QString format = sender()->property("qarma_date_format").toString();
             QDate date = sender()->findChild<QCalendarWidget*>()->selectedDate();
             if (format.isEmpty())
-                printf("%s\n", qPrintable(date.toString(Qt::SystemLocaleShortDate)));
+                printf("%s\n", qPrintable(QLocale::system().toString(date, QLocale::ShortFormat)));
             else
                 printf("%s\n", qPrintable(date.toString(format)));
             break;
         }
         case Entry: {
-            printf("%s\n", qPrintable(static_cast<QInputDialog*>(sender())->textValue()));
+            QInputDialog *dlg = static_cast<QInputDialog*>(sender());
+            if (dlg->inputMode() == QInputDialog::DoubleInput) {
+                printf("%s\n", qPrintable(QLocale::c().toString(dlg->doubleValue(), 'f', 2)));
+            } else if (dlg->inputMode() == QInputDialog::IntInput) {
+                printf("%d\n", dlg->intValue());
+            } else {
+                printf("%s\n", qPrintable(dlg->textValue()));
+            }
             break;
         }
         case Password: {
@@ -399,6 +470,29 @@ void Qarma::dialogFinished(int status)
             for (int i = 0; i < dlg->customCount(); ++i)
                 l << dlg->customColor(i).rgba();
             QSettings("qarma").setValue("CustomPalette", l);
+            break;
+        }
+        case FontSelection: {
+            QFontDialog *dlg = static_cast<QFontDialog*>(sender());
+            QFont fnt = dlg->selectedFont();
+            int size = fnt.pointSize();
+            if (size < 0)
+                size = fnt.pixelSize();
+
+            // crude mapping of Qt's random enum to xft's random category
+            QString weight = "medium";
+            if (fnt.weight() < 35) weight = "light";
+            else if (fnt.weight() > 85) weight = "black";
+            else if (fnt.weight() > 70) weight = "bold";
+            else if (fnt.weight() > 60) weight = "demibold";
+
+            QString slant = "roman";
+            if (fnt.style() == QFont::StyleItalic) slant = "italic";
+            else if (fnt.style() == QFont::StyleOblique) slant = "oblique";
+
+            QString font = sender()->property("qarma_fontpattern").toString();
+            font = font.arg(fnt.family()).arg(size).arg(weight).arg(slant);
+            printf("%s\n", qPrintable(font));
             break;
         }
         case TextInfo: {
@@ -562,6 +656,18 @@ char Qarma::showEntry(const QStringList &args)
             dlg->setTextValue(NEXT_ARG);
         else if (args.at(i) == "--hide-text")
             dlg->setTextEchoMode(QLineEdit::Password);
+        else if (args.at(i) == "--values") {
+            dlg->setComboBoxItems(NEXT_ARG.split('|'));
+            dlg->setComboBoxEditable(true);
+        } else if (args.at(i) == "--int") {
+            dlg->setInputMode(QInputDialog::IntInput);
+            dlg->setIntRange(INT_MIN, INT_MAX);
+            dlg->setIntValue(NEXT_ARG.toInt());
+        } else if (args.at(i) == "--float") {
+            dlg->setInputMode(QInputDialog::DoubleInput);
+            dlg->setDoubleRange(DBL_MIN, DBL_MAX);
+            dlg->setDoubleValue(NEXT_ARG.toDouble());
+        }
         else { WARN_UNKNOWN_ARG("--entry") }
     }
     SHOW_DIALOG
@@ -574,16 +680,19 @@ char Qarma::showPassword(const QStringList &args)
     NEW_DIALOG
 
     QLineEdit *username(nullptr), *password(nullptr);
+    QString prompt = tr("Enter password");
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--username") {
             vl->addWidget(new QLabel(tr("Enter username"), dlg));
             vl->addWidget(username = new QLineEdit(dlg));
             username->setObjectName("qarma_username");
             break;
-        } else { WARN_UNKNOWN_ARG("--password") }
+        } else if (args.at(i) == "--prompt") {
+            prompt = NEXT_ARG;
+        } { WARN_UNKNOWN_ARG("--password") }
     }
 
-    vl->addWidget(new QLabel(tr("Enter password"), dlg));
+    vl->addWidget(new QLabel(prompt, dlg));
     vl->addWidget(password = new QLineEdit(dlg));
     password->setObjectName("qarma_password");
     password->setEchoMode(QLineEdit::Password);
@@ -614,6 +723,8 @@ char Qarma::showMessage(const QStringList &args, char type)
             dlg->setIconPixmap(QIcon(NEXT_ARG).pixmap(64));
         else if (args.at(i) == "--no-wrap")
             wrap = false;
+        else if (args.at(i) == "--ellipsize")
+            wrap = true;
         else if (args.at(i) == "--no-markup")
             html = false;
         else if (args.at(i) == "--default-cancel")
@@ -654,8 +765,13 @@ char Qarma::showFileSelection(const QStringList &args)
         dlg->setSidebarUrls(bookmarks);
     QStringList mimeFilters;
     for (int i = 0; i < args.count(); ++i) {
-        if (args.at(i) == "--filename")
-            dlg->selectFile(NEXT_ARG);
+        if (args.at(i) == "--filename") {
+            QString path = NEXT_ARG;
+            if (path.endsWith("/."))
+                dlg->setDirectory(path);
+            else
+                dlg->selectFile(path);
+        }
         else if (args.at(i) == "--multiple")
             dlg->setFileMode(QFileDialog::ExistingFiles);
         else if (args.at(i) == "--directory") {
@@ -669,8 +785,13 @@ char Qarma::showFileSelection(const QStringList &args)
             dlg->setProperty("qarma_separator", NEXT_ARG);
         else if (args.at(i) == "--confirm-overwrite")
             dlg->setOption(QFileDialog::DontConfirmOverwrite);
-        else if (args.at(i) == "--file-filter")
-            mimeFilters << NEXT_ARG.split(" ");
+        else if (args.at(i) == "--file-filter") {
+            QString mimeFilter = NEXT_ARG;
+            const int idx = mimeFilter.indexOf('|');
+            if (idx > -1)
+                mimeFilter = mimeFilter.left(idx).trimmed() + " (" + mimeFilter.mid(idx+1).trimmed() + ")";
+            mimeFilters << mimeFilter;
+        }
         else { WARN_UNKNOWN_ARG("--file-selection") }
     }
     dlg->setNameFilters(mimeFilters);
@@ -697,6 +818,34 @@ void Qarma::toggleItems(QTreeWidgetItem *item, int column)
     recursion = false;
 }
 
+static void addItems(QTreeWidget *tw, QStringList &values, bool editable, bool checkable, bool icons)
+{
+    for (int i = 0; i < values.count(); ) {
+        QStringList itemValues;
+        for (int j = 0; j < tw->columnCount(); ++j) {
+            itemValues << values.at(i++);
+            if (i == values.count())
+                break;
+        }
+        QTreeWidgetItem *item = new QTreeWidgetItem(tw, itemValues);
+        Qt::ItemFlags flags = item->flags();
+        if (editable)
+            flags |= Qt::ItemIsEditable;
+        if (checkable) {
+            flags |= Qt::ItemIsUserCheckable;
+            item->setCheckState(0, Qt::Unchecked);
+        }
+        if (icons)
+            item->setIcon(0, QPixmap(item->text(0)));
+        if (checkable || icons) {
+            item->setData(0, Qt::EditRole, item->text(0));
+            item->setText(0, QString());
+        }
+        item->setFlags(flags);
+        tw->addTopLevelItem(item);
+    }
+}
+
 char Qarma::showList(const QStringList &args)
 {
     NEW_DIALOG
@@ -711,7 +860,7 @@ char Qarma::showList(const QStringList &args)
     tw->setRootIsDecorated(false);
     tw->setAllColumnsShowFocus(true);
 
-    bool editable(false), checkable(false), exclusive(false), icons(false), ok;
+    bool editable(false), checkable(false), exclusive(false), icons(false), ok, needFilter(true);
     QStringList columns;
     QStringList values;
     QList<int> hiddenCols;
@@ -746,13 +895,28 @@ char Qarma::showList(const QStringList &args)
             exclusive = true;
         } else if (args.at(i) == "--imagelist") {
             icons = true;
+        } else if (args.at(i) == "--mid-search") {
+            if (needFilter) {
+                needFilter = false;
+                QLineEdit *filter;
+                vl->addWidget(filter = new QLineEdit(dlg));
+                filter->setPlaceholderText(tr("Filter"));
+                connect (filter, &QLineEdit::textChanged, this, [=](const QString &match){
+                    for (int i = 0; i < tw->topLevelItemCount(); ++i)
+                        tw->topLevelItem(i)->setHidden(!tw->topLevelItem(i)->text(0).contains(match, Qt::CaseInsensitive));
+                });
+            }
         } else if (args.at(i) != "--list") {
             values << args.at(i);
         }
     }
+    if (values.isEmpty())
+        listenToStdIn();
 
     if (checkable)
         editable = false;
+
+    tw->setProperty("qarma_list_flags", int(editable | checkable << 1 | icons << 2));
 
     int columnCount = qMax(columns.count(), 1);
     tw->setColumnCount(columnCount);
@@ -760,30 +924,8 @@ char Qarma::showList(const QStringList &args)
     foreach (const int &i, hiddenCols)
         tw->setColumnHidden(i, true);
 
-    for (int i = 0; i < values.count(); ) {
-        QStringList itemValues;
-        for (int j = 0; j < columnCount; ++j) {
-            itemValues << values.at(i++);
-            if (i == values.count())
-                break;
-        }
-        QTreeWidgetItem *item = new QTreeWidgetItem(tw, itemValues);
-        Qt::ItemFlags flags = item->flags();
-        if (editable)
-            flags |= Qt::ItemIsEditable;
-        if (checkable) {
-            flags |= Qt::ItemIsUserCheckable;
-            item->setCheckState(0, Qt::Unchecked);
-        }
-        if (icons)
-            item->setIcon(0, QPixmap(item->text(0)));
-        if (checkable || icons) {
-            item->setData(0, Qt::EditRole, item->text(0));
-            item->setText(0, QString());
-        }
-        item->setFlags(flags);
-        tw->addTopLevelItem(item);
-    }
+    addItems(tw, values, editable, checkable, icons);
+
     if (exclusive) {
         connect (tw, SIGNAL(itemChanged(QTreeWidgetItem*, int)), SLOT(toggleItems(QTreeWidgetItem*, int)));
     }
@@ -827,7 +969,7 @@ void Qarma::notify(const QString& message, bool noClose)
     dlg->setText(labelText(message));
     SHOW_DIALOG
     dlg->adjustSize();
-    dlg->move(QApplication::desktop()->availableGeometry().topRight() - QPoint(dlg->width() + 20, -20));
+    dlg->move(QGuiApplication::screens().at(0)->availableGeometry().topRight() - QPoint(dlg->width() + 20, -20));
 }
 
 char Qarma::showNotification(const QStringList &args)
@@ -874,11 +1016,13 @@ void Qarma::finishProgress()
 
 void Qarma::readStdIn()
 {
+    if (!gs_stdin->isOpen())
+        return;
     QSocketNotifier *notifier = qobject_cast<QSocketNotifier*>(sender());
     if (notifier)
         notifier->setEnabled(false);
 
-    QByteArray ba = gs_stdin->readLine();
+    QByteArray ba = m_type == TextInfo ? gs_stdin->readAll() : gs_stdin->readLine();
     if (ba.isEmpty() && notifier) {
         gs_stdin->close();
 //         gs_stdin->deleteLater(); // hello segfault...
@@ -896,26 +1040,43 @@ void Qarma::readStdIn()
     }
 
     QStringList input;
-    if (m_type != TextInfo)
+    if (m_type != TextInfo) {
+        if (newText.endsWith('\n'))
+            newText.resize(newText.length()-1);
         input = newText.split('\n');
+    }
     if (m_type == Progress) {
         QProgressDialog *dlg = static_cast<QProgressDialog*>(m_dialog);
-        if (dlg->maximum() == 0)
-            return; // no input for pulsating progress
+
         const int oldValue = dlg->value();
         bool ok;
         foreach (QString line, input) {
-            static QRegExp nondigit("[^0-9]");
-            int u = line.section(nondigit,0,0).toInt(&ok);
-            if (ok)
-                dlg->setValue(qMin(100,u));
+            if (line.startsWith('#')) {
+                dlg->setLabelText(labelText(line.mid(1)));
+            } else {
+                static const QRegularExpression nondigit("[^0-9]");
+                int u = line.section(nondigit,0,0).toInt(&ok);
+                if (ok)
+                    dlg->setValue(qMin(100,u));
+            }
         }
+
         if (dlg->value() == 100) {
             finishProgress();
         } else if (oldValue == 100) {
             disconnect (dlg, SIGNAL(canceled()), dlg, SLOT(accept()));
             connect (dlg, SIGNAL(canceled()), dlg, SLOT(reject()));
             dlg->setCancelButtonText(m_cancel.isNull() ? tr("Cancel") : m_cancel);
+        } else if (dlg->property("qarma_eta").toBool()) {
+            static QDateTime starttime;
+            if (starttime.isNull()) {
+                starttime = QDateTime::currentDateTime();
+            } else if (dlg->value() > 0) {
+                const qint64 secs = starttime.secsTo(QDateTime::currentDateTime());
+                QString eta = QTime(0,0,0).addSecs(100 * secs / dlg->value() - secs).toString();
+                foreach (QWidget *w, dlg->findChildren<QWidget*>())
+                    w->setToolTip(eta);
+            }
         }
     } else if (m_type == TextInfo) {
         if (QTextEdit *te = m_dialog->findChild<QTextEdit*>()) {
@@ -923,7 +1084,10 @@ void Qarma::readStdIn()
             static QPropertyAnimation *animator = nullptr;
             if (!animator || animator->state() != QPropertyAnimation::Running) {
                 const int oldValue = te->verticalScrollBar() ? te->verticalScrollBar()->value() : 0;
-                te->setText(te->toPlainText() + cachedText);
+                if (te->property("qarma_html").toBool())
+                    te->setHtml(te->toHtml() + cachedText);
+                else
+                    te->setPlainText(te->toPlainText() + cachedText);
                 cachedText.clear();
                 if (te->verticalScrollBar() && te->property("qarma_autoscroll").toBool()) {
                     te->verticalScrollBar()->setValue(oldValue);
@@ -967,6 +1131,11 @@ void Qarma::readStdIn()
         }
         if (userNeedsHelp)
             qDebug() << "icon: <filename>\nmessage: <UTF-8 encoded text>\ntooltip: <UTF-8 encoded text>\nvisible: <true|false>";
+    } else if (m_type == List) {
+        if (QTreeWidget *tw = m_dialog->findChild<QTreeWidget*>()) {
+            const int twflags = tw->property("qarma_list_flags").toInt();
+            addItems(tw, input, twflags & 1, twflags & 1<<1, twflags & 1<<2);
+        }
     }
     if (notifier)
         notifier->setEnabled(true);
@@ -1004,7 +1173,10 @@ char Qarma::showProgress(const QStringList &args)
         else if (args.at(i) == "--no-cancel") {
             if (QPushButton *btn = dlg->findChild<QPushButton*>())
                 btn->hide();
-        } else { WARN_UNKNOWN_ARG("--progress") }
+        } else if (args.at(i) == "--time-remaining") {
+            dlg->setProperty("qarma_eta", true);
+        }
+        else { WARN_UNKNOWN_ARG("--progress") }
     }
 
     listenToStdIn();
@@ -1075,21 +1247,21 @@ char Qarma::showText(const QStringList &args)
 {
     NEW_DIALOG
 
-    QTextEdit *te;
-    vl->addWidget(te = new QTextEdit(dlg));
+    QTextBrowser *te;
+    vl->addWidget(te = new QTextBrowser(dlg));
     te->setReadOnly(true);
+    te->setOpenExternalLinks(true);
     QCheckBox *cb(nullptr);
-
-    bool needStdIn(true);
+    QString filename;
+    bool html(false), plain(false), onlyMarkup(false), url(false);
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--filename") {
-            needStdIn = false;
-            QFile file(NEXT_ARG);
-            if (file.open(QIODevice::ReadOnly)) {
-                te->setText(QString::fromLocal8Bit(file.readAll()));
-                file.close();
-            }
-        } else if (args.at(i) == "--editable")
+            filename = NEXT_ARG;
+        } else if (args.at(i) == "--url") {
+            filename = NEXT_ARG;
+            url = true;
+        }
+        else if (args.at(i) == "--editable")
             te->setReadOnly(false);
         else if (args.at(i) == "--font") {
             te->setFont(QFont(NEXT_ARG));
@@ -1097,12 +1269,23 @@ char Qarma::showText(const QStringList &args)
             vl->addWidget(cb = new QCheckBox(NEXT_ARG, dlg));
         } else if (args.at(i) == "--auto-scroll") {
             te->setProperty("qarma_autoscroll", true);
+        } else if (args.at(i) == "--html") {
+            html = true;
+            te->setProperty("qarma_html", true);
+        } else if (args.at(i) == "--plain") {
+            plain = true;
+        } else if (args.at(i) == "--no-interaction") {
+            onlyMarkup = true;
         } else { WARN_UNKNOWN_ARG("--text-info") }
     }
 
+    if (html) {
+        te->setReadOnly(true);
+        te->setTextInteractionFlags(onlyMarkup ? Qt::TextSelectableByMouse : Qt::TextBrowserInteraction);
+    }
     if (te->isReadOnly()) {
         QPalette pal = te->viewport()->palette();
-        for (int i = 0; i < 4; ++i) { // Disabled, Active, Inactive, Normal
+        for (int i = 0; i < 3; ++i) { // Disabled, Active, Inactive, Normal
             QPalette::ColorGroup cg = (QPalette::ColorGroup)i;
             pal.setColor(cg, QPalette::Base, pal.color(cg, QPalette::Window));
             pal.setColor(cg, QPalette::Text, pal.color(cg, QPalette::WindowText));
@@ -1112,8 +1295,27 @@ char Qarma::showText(const QStringList &args)
         te->setFrameStyle(QFrame::NoFrame);
     }
 
-    if (needStdIn)
+    if (filename.isNull()) {
         listenToStdIn();
+    } else if (url) {
+        QProcess *curl = new QProcess;
+        connect(curl, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), [=]() {
+            te->setText(QString::fromLocal8Bit(curl->readAllStandardOutput()));
+            delete curl;
+        });
+        curl->start("curl", QStringList() << "-L" << "-s" << filename);
+    } else {
+        QFile file(filename);
+        if (file.open(QIODevice::ReadOnly)) {
+            if (html)
+                te->setHtml(QString::fromLocal8Bit(file.readAll()));
+            else if (plain)
+                te->setPlainText(QString::fromLocal8Bit(file.readAll()));
+            else
+                te->setText(QString::fromLocal8Bit(file.readAll()));
+            file.close();
+        }
+    }
 
     FINISH_DIALOG(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
 
@@ -1139,8 +1341,67 @@ char Qarma::showColorSelection(const QStringList &args)
         } else if (args.at(i) == "--show-palette") {
             qWarning("The show-palette parameter is not supported by qarma. Sorry.");
             void(0);
-        } else { WARN_UNKNOWN_ARG("--color-selection") }
+        } else if (args.at(i) == "--custom-palette") {
+            if (i+1 < args.count()) {
+                QString path = NEXT_ARG;
+                QFile file(path);
+                if (file.open(QIODevice::ReadOnly)) {
+                    QStringList pal = QString::fromLocal8Bit(file.readAll()).split('\n');
+                    int r, g, b; bool ok; int idx = 0;
+                    for (const QString &line : pal) {
+                        if (idx > 47) break; // sorry :(
+                        QStringList color = line.split(QRegularExpression("\\s+"), SKIP_EMPTY);
+                        if (color.count() < 3) continue;
+                        r = color.at(0).toInt(&ok); if (!ok) continue;
+                        g = color.at(1).toInt(&ok); if (!ok) continue;
+                        b = color.at(2).toInt(&ok); if (!ok) continue;
+                        dlg->setStandardColor(idx++, QColor(r,g,b));
+                    }
+                    while (idx < 48) {
+                        dlg->setStandardColor(idx++, Qt::black);
+                    }
+                    file.close();
+                } else {
+                    qWarning("Cannot read %s", path.toLocal8Bit().constData());
+                }
+            } else {
+                qWarning("You have to provide a gimp palette (*.gpl)");
+            }
+        }{ WARN_UNKNOWN_ARG("--color-selection") }
     }
+    SHOW_DIALOG
+    return 0;
+}
+
+char Qarma::showFontSelection(const QStringList &args)
+{
+    QFontDialog *dlg = new QFontDialog;
+    QString pattern = "%1-%2:%3:%4";
+    QString sample = "The quick brown fox jumps over the lazy dog";
+    for (int i = 0; i < args.count(); ++i) {
+        if (args.at(i) == "--type") {
+            QStringList types = NEXT_ARG.split(',');
+            QFontDialog::FontDialogOptions opts;
+            for (const QString &type : types) {
+                if (type == "vector")   opts |= QFontDialog::ScalableFonts;
+                if (type == "bitmap")   opts |= QFontDialog::NonScalableFonts;
+                if (type == "fixed")    opts |= QFontDialog::MonospacedFonts;
+                if (type == "variable") opts |= QFontDialog::ProportionalFonts;
+            }
+            if (opts) // https://bugreports.qt.io/browse/QTBUG-93473
+                dlg->setOptions(opts);
+            dlg->setCurrentFont(QFont()); // also works around the bug :P
+        } else if (args.at(i) == "--pattern") {
+            pattern = NEXT_ARG;
+            if (!pattern.contains("%1"))
+                qWarning("The output pattern doesn't include a placeholder for the font name...");
+        } else if (args.at(i) == "--sample") {
+            sample = NEXT_ARG;
+        } { WARN_UNKNOWN_ARG("--font-selection") }
+    }
+    if (QLineEdit *smpl = dlg->findChild<QLineEdit*>("qt_fontDialog_sampleEdit"))
+        smpl->setText(sample);
+    dlg->setProperty("qarma_fontpattern", pattern);
     SHOW_DIALOG
     return 0;
 }
@@ -1265,13 +1526,14 @@ QString Qarma::labelText(const QString &s) const
          .replace("\\r", "<br>");
         int idx = 0;
         while (true) {
-            idx = r.indexOf(QRegExp("\\\\([0-9]{1,3})"), idx);
+            static const QRegularExpression octet("\\\\([0-9]{1,3})");
+            idx = r.indexOf(octet, idx);
             if (idx < 0)
                 break;
             int sz = 0;
             while (sz < 3 && r.at(idx+sz+1).isDigit())
                 ++sz;
-            r.replace(idx, sz+1, QChar(r.midRef(idx+1, sz).toUInt(nullptr, 8)));
+            r.replace(idx, sz+1, QChar(r.mid(idx+1, sz).toUInt(nullptr, 8)));
         }
         r.remove("\\").replace(("\a"), "\\");
         return r;
@@ -1325,18 +1587,23 @@ void Qarma::printHelp(const QString &category)
         helpDict["entry"] = CategoryHelp(tr("Text entry options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--entry-text=TEXT", tr("Set the entry text")) <<
-                            Help("--hide-text", tr("Hide the entry text")));
+                            Help("--hide-text", tr("Hide the entry text")) <<
+                            Help("--values=v1|v2|v3|...", "QARMA ONLY! " + tr("Offer preset values to pick from")) <<
+                            Help("--int=integer", "QARMA ONLY! " + tr("Integer input only, preset given value")) <<
+                            Help("--float=floating_point", "QARMA ONLY! " + tr("Floating point input only, preset given value")));
         helpDict["error"] = CategoryHelp(tr("Error options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["info"] = CategoryHelp(tr("Info options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["file-selection"] = CategoryHelp(tr("File selection options"), HelpList() <<
                             Help("--filename=FILENAME", tr("Set the filename")) <<
@@ -1346,7 +1613,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--separator=SEPARATOR", tr("Set output separator character")) <<
                             Help("--confirm-overwrite", tr("Confirm file selection if filename already exists")) <<
                             Help("--file-filter=NAME | PATTERN1 PATTERN2 ...", tr("Sets a filename filter")));
-        helpDict["list"] = CategoryHelp(tr("List options"), HelpList() <<
+        helpDict["list"] = CategoryHelp(tr("List Command\n  %1 --list [Options] [Item1 ...]\nList Options").arg(applicationName()), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--column=COLUMN", tr("Set the column header")) <<
                             Help("--checklist", tr("Use check boxes for first column")) <<
@@ -1357,7 +1624,8 @@ void Qarma::printHelp(const QString &category)
                             Help("--editable", tr("Allow changes to text")) <<
                             Help("--print-column=NUMBER", tr("Print a specific column (Default is 1. 'ALL' can be used to print all columns)")) <<
                             Help("--hide-column=NUMBER", tr("Hide a specific column")) <<
-                            Help("--hide-header", tr("Hides the column headers")));
+                            Help("--hide-header", tr("Hides the column headers")) <<
+                            Help("--mid-search", tr("Change list default search function searching for text in the middle, not on the beginning")));
         helpDict["notification"] = CategoryHelp(tr("Notification icon options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--listen", tr("Listen for commands on stdin")) <<
@@ -1376,12 +1644,14 @@ void Qarma::printHelp(const QString &category)
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
                             Help("--default-cancel", tr("Give cancel button focus by default")) <<
+                            Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["warning"] = CategoryHelp(tr("Warning options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
+                            Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["scale"] = CategoryHelp(tr("Scale options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
@@ -1396,12 +1666,22 @@ void Qarma::printHelp(const QString &category)
                             Help("--editable", tr("Allow changes to text")) <<
                             Help("--font=TEXT", tr("Set the text font")) <<
                             Help("--checkbox=TEXT", tr("Enable an I read and agree checkbox")) <<
+                            Help("--plain", "QARMA ONLY! " + tr("Force plain text, zenity default limitation")) <<
+                            Help("--html", tr("Enable HTML support")) <<
+                            Help("--no-interaction", tr("Do not enable user interaction with the WebView. Only works if you use --html option")) <<
+                            Help("--url=URL", "REQUIRES CURL BINARY! " + tr("Set an URL instead of a file. Only works if you use --html option")) <<
                             Help("--auto-scroll", tr("Auto scroll the text to the end. Only when text is captured from stdin")));
         helpDict["color-selection"] = CategoryHelp(tr("Color selection options"), HelpList() <<
                             Help("--color=VALUE", tr("Set the color")) <<
-                            Help("--show-palette", tr("Show the palette")));
+                            Help("--show-palette", tr("Show the palette")) <<
+                            Help("--custom-palette=path/to/some.gpl",  "QARMA ONLY! " + tr("Load a custom GPL for standard colors")));
+        helpDict["font-selection"] = CategoryHelp(tr("Font selection options"), HelpList() <<
+                            Help("--type=[vector][,bitmap][,fixed][,variable]", tr("Filter fonts (default: all)")) <<
+                            Help("--pattern=%1-%2:%3:%4", tr("Output pattern, %1: Name, %2: Size, %3: weight, %4: slant")) <<
+                            Help("--sample=TEXT", tr("Sample text, defaults to the foxdogthing")));
         helpDict["password"] = CategoryHelp(tr("Password dialog options"), HelpList() <<
-                            Help("--username", tr("Display the username option")));
+                            Help("--username", tr("Display the username option")) <<
+                            Help("--prompt=TEXT", "QARMA ONLY! " + tr("The prompt for the user")));
         helpDict["forms"] = CategoryHelp(tr("Forms dialog options"), HelpList() <<
                             Help("--add-entry=Field name", tr("Add a new Entry in forms dialog")) <<
                             Help("--add-password=Field name", tr("Add a new Password Entry in forms dialog")) <<
@@ -1436,9 +1716,20 @@ void Qarma::printHelp(const QString &category)
                             Help("--scale", tr("Display scale dialog")) <<
                             Help("--text-info", tr("Display text information dialog")) <<
                             Help("--color-selection", tr("Display color selection dialog")) <<
+                            Help("--font-selection", "QARMA ONLY! " + tr("Display font selection dialog")) <<
                             Help("--password", tr("Display password dialog")) <<
                             Help("--forms", tr("Display forms dialog")) <<
                             Help("--display=DISPLAY", tr("X display to use")));
+    }
+
+    if (category == "all") {
+        foreach(const CategoryHelp &el, helpDict) {
+            printf("%s\n", qPrintable(el.first));
+            foreach (const Help &help, el.second)
+                printf("  %-53s%s\n", qPrintable(help.first), qPrintable(help.second));
+            printf("\n");
+        }
+        return;
     }
 
     HelpDict::const_iterator it = helpDict.constEnd();
@@ -1460,6 +1751,8 @@ void Qarma::printHelp(const QString &category)
 
 int main (int argc, char **argv)
 {
+    if (argc > 0)
+        QCoreApplication::setApplicationName(argv[0]); // autoset my ass…
     if (argc < 2) {
         Qarma::printHelp();
         return 1;
