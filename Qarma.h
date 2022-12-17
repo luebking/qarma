@@ -65,7 +65,7 @@ private slots:
     void finishProgress();
 private:
     bool m_helpMission, m_modal, m_zenity, m_selectableLabel;
-    QString m_caption, m_icon, m_ok, m_cancel, m_notificationHints;
+    QString m_caption, m_icon, m_ok, m_cancel, m_notificationHints, m_class, m_name;
     QSize m_size;
     int m_parentWindow, m_timeout;
     uint m_notificationId;
