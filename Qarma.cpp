@@ -205,6 +205,17 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
     if (!readGeneral(args))
         return;
 
+    // set application class
+    if (!m_class.isNull())
+        QCoreApplication::setApplicationName(m_class);
+
+    // set application name
+    if (!m_name.isNull())
+        // Qt intercepts "--name name" but fails to process "--name=name"
+        // Workaround this by setting the RESOURCE_NAME environment variable
+        // which ends up being used to populate the WM_CLASS name on X11.
+        qputenv("RESOURCE_NAME", m_name.toLocal8Bit());
+
     char error = 1;
     foreach (const QString &arg, args) {
         if (arg == "--calendar") {
@@ -593,6 +604,10 @@ bool Qarma::readGeneral(QStringList &args) {
             if (!ok)
                 return !error("--attach must be followed by a positive number");
             m_parentWindow = w;
+        } else if (args.at(i) == "--class") {
+            m_class = NEXT_ARG;
+        } else if (args.at(i) == "--name") {
+            m_name = NEXT_ARG;
         } else {
             remains << args.at(i);
         }
@@ -1720,7 +1735,9 @@ void Qarma::printHelp(const QString &category)
                             Help("--font-selection", "QARMA ONLY! " + tr("Display font selection dialog")) <<
                             Help("--password", tr("Display password dialog")) <<
                             Help("--forms", tr("Display forms dialog")) <<
-                            Help("--display=DISPLAY", tr("X display to use")));
+                            Help("--display=DISPLAY", tr("X display to use")) <<
+                            Help("--class=CLASS", tr("Program class as used by the window manager")) <<
+                            Help("--name=NAME", tr("Program name as used by the window manager")));
     }
 
     if (category == "all") {
