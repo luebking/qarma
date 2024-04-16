@@ -172,12 +172,14 @@ typedef QMap<QString, CategoryHelp> HelpDict;
 Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_modal(false)
 , m_selectableLabel(false)
+, m_popup(false)
 , m_parentWindow(0)
 , m_timeout(0)
 , m_notificationId(0)
 , m_dialog(NULL)
 , m_type(Invalid)
 {
+    m_pos = QPoint(INT_MIN, INT_MAX); // invalid
     QStringList argList = QCoreApplication::arguments(); // arguments() is slow
     const QString binary = argList.at(0);
     m_zenity = binary.endsWith("zenity");
@@ -324,7 +326,16 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
                 sz.setHeight(m_size.height());
             m_dialog->resize(sz);
         }
+        if (m_pos.x() < INT_MAX) {
+            QRect desktop = QGuiApplication::screens().at(0)->availableGeometry();
+            if (m_pos.x() < 0)
+                m_pos.rx() = desktop.right() + m_pos.x() - m_dialog->width();
+            if (m_pos.y() < 0)
+                m_pos.ry() = desktop.bottom() + m_pos.y() - m_dialog->height();
+            m_dialog->move(m_pos);
+        }
         m_dialog->setWindowModality(m_modal ? Qt::ApplicationModal : Qt::NonModal);
+
         /*  Stage #2 one of "Setting a window title should be easy but Qt5 is dumb"
             Errhemmm... Fuck! This! Shit!
             Not only is Qt5 too dumb to set the window title by parameter, if one
@@ -566,6 +577,7 @@ void Qarma::quitOnError()
 #define NEXT_ARG QString((++i < args.count()) ? args.at(i) : QString())
 #define WARN_UNKNOWN_ARG(_KNOWN_) if (args.at(i).startsWith("--") && args.at(i) != _KNOWN_) qDebug() << "unspecific argument" << args.at(i);
 #define SHOW_DIALOG m_dialog = dlg; connect(dlg, SIGNAL(finished(int)), SLOT(dialogFinished(int))); dlg->show();
+#define READ_INT(_V_, _TYPE_, _ERROR_) bool ok; const int _V_ = NEXT_ARG.to##_TYPE_(&ok); if (!ok) return !error(_ERROR_)
 
 bool Qarma::readGeneral(QStringList &args) {
     QStringList remains;
@@ -575,22 +587,22 @@ bool Qarma::readGeneral(QStringList &args) {
         } else if (args.at(i) == "--window-icon") {
             m_icon = NEXT_ARG;
         } else if (args.at(i) == "--width") {
-            bool ok;
-            const int w = NEXT_ARG.toUInt(&ok);
-            if (!ok)
-                return !error("--width must be followed by a positive number");
+            READ_INT(w, UInt, "--width must be followed by a positive number");
             m_size.setWidth(w);
         } else if (args.at(i) == "--height") {
-            bool ok;
-            const int h = NEXT_ARG.toUInt(&ok);
-            if (!ok)
-                return !error("--height must be followed by a positive number");
+            READ_INT(h, UInt, "--height must be followed by a positive number");
             m_size.setHeight(h);
+        } else if (args.at(i) == "--pos") {
+            QString pos = NEXT_ARG;
+            QRegularExpressionMatch m = QRegularExpression("([+-]*[0-9]+)([+-][0-9]+)?").match(pos);
+            if (m.lastCapturedIndex() > 0 && m.lastCapturedIndex() < 3) {
+                m_pos.setX(m.captured(1).toInt());
+                m_pos.setY(m.lastCapturedIndex() == 2 ? m.captured(2).toInt() : 0);
+            } else {
+                return !error("--pos must be followed by a position [+-]x[(+-)y]");
+            }
         } else if (args.at(i) == "--timeout") {
-            bool ok;
-            const int t = NEXT_ARG.toUInt(&ok);
-            if (!ok)
-                return !error("--timeout must be followed by a positive number");
+            READ_INT(t, UInt, "--timeout must be followed by a positive number");
             QTimer::singleShot(t*1000, this, SLOT(quit()));
         } else if (args.at(i) == "--ok-label") {
             m_ok = NEXT_ARG;
@@ -598,11 +610,10 @@ bool Qarma::readGeneral(QStringList &args) {
             m_cancel = NEXT_ARG;
         } else if (args.at(i) == "--modal") {
             m_modal = true;
+        } else if (args.at(i) == "--popup") {
+            m_popup = true;
         } else if (args.at(i) == "--attach") {
-            bool ok;
-            const int w = NEXT_ARG.toUInt(&ok, 0);
-            if (!ok)
-                return !error("--attach must be followed by a positive number");
+            READ_INT(w, UInt, "--attach must be followed by a positive number");
             m_parentWindow = w;
         } else if (args.at(i) == "--class") {
             m_class = NEXT_ARG;
@@ -616,7 +627,7 @@ bool Qarma::readGeneral(QStringList &args) {
     return true;
 }
 
-#define NEW_DIALOG QDialog *dlg = new QDialog; QVBoxLayout *vl = new QVBoxLayout(dlg);
+#define NEW_DIALOG QDialog *dlg = new QDialog; QVBoxLayout *vl = new QVBoxLayout(dlg); if (m_popup) dlg->setWindowFlags(Qt::Popup);
 #define FINISH_DIALOG(_BTNS_)   QDialogButtonBox *btns = new QDialogButtonBox(_BTNS_, Qt::Horizontal, dlg);\
                                 vl->addWidget(btns);\
                                 connect(btns, SIGNAL(accepted()), dlg, SLOT(accept()));\
@@ -655,8 +666,9 @@ char Qarma::showCalendar(const QStringList &args)
     cal->setSelectedDate(date);
     vl->addWidget(cal);
     connect(cal, SIGNAL(activated(const QDate&)), dlg, SLOT(accept()));
-
-    FINISH_DIALOG(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
+    if (!m_popup) {
+        FINISH_DIALOG(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
+    }
     SHOW_DIALOG
     return 0;
 }
@@ -1588,10 +1600,12 @@ void Qarma::printHelp(const QString &category)
                             Help("--window-icon=ICONPATH", tr("Set the window icon")) <<
                             Help("--width=WIDTH", tr("Set the width")) <<
                             Help("--height=HEIGHT", tr("Set the height")) <<
+                            Help("--pos=[+-]x[(+-)y]", "QARMA ONLY! " + tr("Set the position")) <<
                             Help("--timeout=TIMEOUT", tr("Set dialog timeout in seconds")) <<
                             Help("--ok-label=TEXT", tr("Sets the label of the Ok button")) <<
                             Help("--cancel-label=TEXT", tr("Sets the label of the Cancel button")) <<
                             Help("--modal", tr("Set the modal hint")) <<
+                            Help("--popup", "QARMA ONLY! " + tr("Open dialog as unframed and trasient popup window")) <<
                             Help("--attach=WINDOW", tr("Set the parent window to attach to")));
         helpDict["calendar"] = CategoryHelp(tr("Calendar options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
