@@ -31,7 +31,7 @@ class Qarma : public QApplication
 public:
     Qarma(int &argc, char **argv);
     enum Type { Invalid, Calendar, Entry, Error, Info, FileSelection, List, Notification, Progress, Question, Warning,
-                Scale, TextInfo, ColorSelection, FontSelection, Password, Forms };
+                Scale, TextInfo, ColorSelection, FontSelection, Password, Forms, Dzen };
     static void printHelp(const QString &category = QString());
     using  QApplication::notify;
 private:
@@ -50,6 +50,7 @@ private:
     char showColorSelection(const QStringList &args);
     char showFontSelection(const QStringList &args);
     char showForms(const QStringList &args);
+    char showDzen(const QStringList &args);
     bool readGeneral(QStringList &args);
     bool error(const QString message);
     void listenToStdIn();

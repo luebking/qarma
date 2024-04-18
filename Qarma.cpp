@@ -179,7 +179,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_dialog(NULL)
 , m_type(Invalid)
 {
-    m_pos = QPoint(INT_MIN, INT_MAX); // invalid
+    m_pos = QPoint(INT_MAX, INT_MAX); // invalid
     QStringList argList = QCoreApplication::arguments(); // arguments() is slow
     const QString binary = argList.at(0);
     m_zenity = binary.endsWith("zenity");
@@ -268,6 +268,9 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         } else if (arg == "--forms") {
             m_type = Forms;
             error = showForms(args);
+        } else if (arg == "--dzen") {
+            m_type = Dzen;
+            error = showDzen(args);
         }
         if (error != 1) {
             break;
@@ -1163,9 +1166,38 @@ void Qarma::readStdIn()
             const int twflags = tw->property("qarma_list_flags").toInt();
             addItems(tw, input, twflags & 1, twflags & 1<<1, twflags & 1<<2);
         }
+    } else if (m_type == Dzen) {
+        while (true) {
+            ba = gs_stdin->read(8192);
+            if (ba.isEmpty())
+                break;
+            newText = QString::fromLocal8Bit(ba);
+            if (newText.endsWith('\n'))
+                newText.resize(newText.length()-1);
+            input.append(newText.split('\n'));
+            if (ba.size() < 8192) /** @todo: if the input block is exactly 8kB, we're gonna wait for the next one here */
+                break;
+        }
+//        if (input.isEmpty())
+//            return;
+        QLabel *header = m_dialog->findChild<QLabel*>("header");
+        QLabel *body = m_dialog->findChild<QLabel*>("body");
+        if (body) {
+            if (header->text().isEmpty() || m_dialog->property("unified").toBool())
+                header->setText(input.takeFirst());
+            if (!input.isEmpty()) {
+                QStringList oldBody = body->text().split('\n');
+                oldBody.append(input);
+                const int idx = qMax(0, oldBody.count() - body->property("lines").toInt());
+                body->setText(oldBody.mid(idx).join('\n'));
+            }
+        } else {
+            header->setText(input.constLast());
+        }
     }
     if (notifier)
         notifier->setEnabled(true);
+    QCoreApplication::processEvents();
 }
 
 void Qarma::listenToStdIn()
@@ -1531,6 +1563,147 @@ char Qarma::showForms(const QStringList &args)
 
 
     FINISH_DIALOG(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
+    SHOW_DIALOG
+    return 0;
+}
+
+static QFont xftFont(const QString &pattern)
+{
+    QFont font;
+    if (pattern.isEmpty())
+        return font;
+    /*
+    plausible subset of https://keithp.com/~keithp/render/Xft.tutorial 
+    <family>-<size>:<name>=<value>...
+    */
+    const QStringList fields = pattern.split(':');
+    bool ok = false;
+    int size = -1;
+    const int split = fields.at(0).lastIndexOf('-');
+    if (split > 0) size = fields.at(0).mid(split + 1).toUInt(&ok);
+    font = ok ? QFont(fields.at(0).mid(0, split), size) : QFont(fields.at(0));
+    
+    for (int i = 1; i < fields.count(); ++i) {
+        if (fields.at(i) == "light") font.setWeight(QFont::Light);
+        else if (fields.at(i) == "medium") font.setWeight(QFont::Medium);
+        else if (fields.at(i) == "demibold") font.setWeight(QFont::DemiBold);
+        else if (fields.at(i) == "bold") font.setWeight(QFont::Bold);
+        else if (fields.at(i) == "black") font.setWeight(QFont::Black);
+        else if (fields.at(i) == "roman") font.setItalic(false);
+        else if (fields.at(i) == "italic") font.setItalic(true);
+        else if (fields.at(i) == "oblique") font.setItalic(true);
+        else if (fields.at(i).contains('=')) {
+            QStringList field = fields.at(i).split('=');
+            if (field.count() < 2) continue;
+            if (field.at(0) == "family") font.setFamily(field.at(1));
+            else if (field.at(0) == "weight") font.setWeight(QFont::Weight(field.at(1).toUInt()));
+            else if (field.at(0) == "size") font.setPointSizeF(field.at(1).toFloat());
+            else if (field.at(0) == "pixelsize") font.setPixelSize(field.at(1).toUInt());
+            else if (field.at(0) == "slant") {
+                if (field.at(0) == "italic" || field.at(0) == "oblique")
+                    font.setItalic(true);
+            }
+        }
+    }
+    return font;
+}
+
+char Qarma::showDzen(const QStringList &args)
+{
+//    m_popup = true;
+    NEW_DIALOG
+    vl->setContentsMargins(0, 0, 0, 0);
+    QLabel *header, *body;
+    vl->addWidget(header = new QLabel(dlg));
+    header->setObjectName("header");
+    header->setAlignment(Qt::AlignCenter);
+    vl->addWidget(body = new QLabel(dlg));
+    body->setObjectName("body");
+   
+    
+    QPalette pal = dlg->palette();
+    if (m_pos.x() == INT_MAX)
+        m_pos = QPoint(0,0);
+
+    int suicide = 0;
+
+    for (int i = 0; i < args.count(); ++i) {
+        if (args.at(i) == "-fg") {
+            QColor c(NEXT_ARG);
+            for (int i = 0; i < 3; ++i) { // Disabled, Active, Inactive, Normal
+                QPalette::ColorGroup cg = (QPalette::ColorGroup)i;
+                pal.setColor(cg, QPalette::Text, c);
+                pal.setColor(cg, QPalette::WindowText, c);
+            }
+        } else if (args.at(i) == "-bg") {
+            QColor c(NEXT_ARG);
+            for (int i = 0; i < 3; ++i) { // Disabled, Active, Inactive, Normal
+                QPalette::ColorGroup cg = (QPalette::ColorGroup)i;
+                pal.setColor(cg, QPalette::Base, c);
+                pal.setColor(cg, QPalette::Window, c);
+            }
+        } else if (args.at(i) == "-bg") {
+            QColor c(NEXT_ARG);
+            for (int i = 0; i < 3; ++i) { // Disabled, Active, Inactive, Normal
+                QPalette::ColorGroup cg = (QPalette::ColorGroup)i;
+                pal.setColor(cg, QPalette::Base, c);
+                pal.setColor(cg, QPalette::Window, c);
+            }
+        } else if (args.at(i) == "-fn") {
+            dlg->setFont(xftFont(NEXT_ARG));
+        } else if (args.at(i) == "-ta" || args.at(i) == "-sa") {
+            QLabel *label = args.at(i) == "-sa" ? body : header;
+            QString align = NEXT_ARG;
+            if (align.startsWith('l', Qt::CaseInsensitive))
+                label->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+            else if (align.startsWith('c', Qt::CaseInsensitive))
+                label->setAlignment(Qt::AlignCenter);
+            else if (align.startsWith('r', Qt::CaseInsensitive))
+                label->setAlignment(Qt::AlignRight|Qt::AlignVCenter);
+        } else if (args.at(i) == "-l") {
+            READ_INT(lines, UInt, "-l(ines) expects a positive integer as next value");
+            body->setProperty("lines", lines);
+        } else if (args.at(i) == "-x") {
+            READ_INT(x, UInt, "-x expects a positive integer as next value");
+            m_pos.setX(x);
+        } else if (args.at(i) == "-y") {
+            READ_INT(y, UInt, "-y expects a positive integer as next value");
+            m_pos.setY(y);
+        } else if (args.at(i) == "-w") {
+            READ_INT(w, UInt, "-w expects a positive integer as next value");
+            m_size.setWidth(w);
+        } else if (args.at(i) == "-l") {
+            READ_INT(lines, UInt, "-l(ines) expects a positive integer as next value");
+            body->setProperty("lines", lines);
+        } else if (args.at(i) == "-p") {
+            suicide = -1;
+            if (i+1 < args.count()) {
+                bool ok;
+                suicide = QString(args.at(i+1)).toUInt(&ok);
+                if (ok)
+                    ++i;
+                else
+                    suicide = -1;
+            }
+        } else if (args.at(i) == "-u") {
+            dlg->setProperty("unified", true);
+        } else { WARN_UNKNOWN_ARG("--dzen") }
+    }
+    if (!body->property("lines").isValid())
+        delete body;
+    dlg->setPalette(pal);
+//       62     -tw     title window width
+//       65     -e      events and actions, see (2)
+//       66     -m      menu mode, see (3)
+//       72     -h      line height (default: fontheight + 2 pixels)
+//       74     -xs     number of Xinerama screen
+    
+    listenToStdIn();
+    if (suicide > -1)
+        connect (gs_stdin, &QFile::aboutToClose, this, [=](){
+                    QTimer::singleShot(suicide*1000, this, SLOT(quit()));
+                });
+    dlg->setWindowFlags(Qt::BypassWindowManagerHint);
     SHOW_DIALOG
     return 0;
 }
