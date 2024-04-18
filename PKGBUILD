@@ -1,13 +1,13 @@
 # Maintainer: Thomas Lübking <thomas.luebking at gmail>
 
 pkgname=qarma
-pkgver=r71.968836b
+pkgver=r85.6ee1a72
 pkgrel=1
 pkgdesc="A drop-in replacement clone for zenity, written in Qt5/6"
 arch=('i686' 'x86_64')
 url="https://github.com/luebking/qarma"
 license=('GPL')
-depends=('qt5-base')
+depends=('qt6-base')
 makedepends=('git' 'gcc')
 
 pkgver()
@@ -17,7 +17,7 @@ pkgver()
 
 build()
 {
-    qmake-qt5 ..
+    qmake6 ..
     make
 }
 
