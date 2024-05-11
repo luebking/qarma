@@ -1,10 +1,15 @@
 HEADERS = Qarma.h
 SOURCES = Qarma.cpp
-QT      += dbus gui widgets
+QT      += gui widgets
 lessThan(QT_MAJOR_VERSION, 6){
   unix:!macx:QT += x11extras
 }
 TARGET  = qarma
+
+!DISABLE_DBUS {
+	DEFINES += DBUS_ENABLED
+	QT += dbus
+}
 
 unix:!macx:LIBS    += -lX11
 unix:!macx:DEFINES += WS_X11
