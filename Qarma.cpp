@@ -1052,7 +1052,7 @@ void Qarma::readStdIn()
     if (notifier)
         notifier->setEnabled(false);
 
-    QByteArray ba = m_type == TextInfo ? gs_stdin->readAll() : gs_stdin->readLine();
+    QByteArray ba = (m_type == TextInfo || m_type == List) ? gs_stdin->readAll() : gs_stdin->readLine();
     if (ba.isEmpty() && notifier) {
         gs_stdin->close();
 //         gs_stdin->deleteLater(); // hello segfault...
