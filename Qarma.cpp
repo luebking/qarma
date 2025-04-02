@@ -1674,9 +1674,6 @@ char Qarma::showDzen(const QStringList &args)
         } else if (args.at(i) == "-w") {
             READ_INT(w, UInt, "-w expects a positive integer as next value");
             m_size.setWidth(w);
-        } else if (args.at(i) == "-l") {
-            READ_INT(lines, UInt, "-l(ines) expects a positive integer as next value");
-            body->setProperty("lines", lines);
         } else if (args.at(i) == "-p") {
             suicide = -1;
             if (i+1 < args.count()) {
