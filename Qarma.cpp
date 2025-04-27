@@ -1058,6 +1058,8 @@ void Qarma::readStdIn()
 //         gs_stdin->deleteLater(); // hello segfault...
 //         gs_stdin = NULL;
         notifier->deleteLater();
+        if (m_type == Progress)
+            finishProgress();
         return;
     }
 
