@@ -1766,6 +1766,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--help-scale", tr("Show scale options")) <<
                             Help("--help-text-info", tr("Show text information options")) <<
                             Help("--help-color-selection", tr("Show color selection options")) <<
+                            Help("--help-font-selection", tr("Show font selection options")) <<
                             Help("--help-password", tr("Show password dialog options")) <<
                             Help("--help-forms", tr("Show forms dialog options")) <<
                             Help("--help-misc", tr("Show miscellaneous options")) <<
