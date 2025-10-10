@@ -863,7 +863,7 @@ static void addItems(QTreeWidget *tw, QStringList &values, bool editable, bool c
             flags |= Qt::ItemIsEditable;
         if (checkable) {
             flags |= Qt::ItemIsUserCheckable;
-            item->setCheckState(0, Qt::Unchecked);
+            item->setCheckState(0, QVariant(item->text(0)).toBool() ? Qt::Checked : Qt::Unchecked);
         }
         if (icons)
             item->setIcon(0, QPixmap(item->text(0)));
