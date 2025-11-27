@@ -365,12 +365,18 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
             m_dialog->setWindowIcon(QIcon(m_icon));
         QDialogButtonBox *box = m_dialog->findChild<QDialogButtonBox*>();
         if (box && !m_ok.isNull()) {
-            if (QPushButton *btn = box->button(QDialogButtonBox::Ok))
+            if (QPushButton *btn = box->button(QDialogButtonBox::Ok)) {
                 btn->setText(m_ok);
+                if (m_ok.isEmpty())
+                    btn->hide();
+            }
         }
         if (box && !m_cancel.isNull()) {
-            if (QPushButton *btn = box->button(QDialogButtonBox::Cancel))
+            if (QPushButton *btn = box->button(QDialogButtonBox::Cancel)) {
                 btn->setText(m_cancel);
+                if (m_cancel.isEmpty())
+                    btn->hide();
+            }
         }
         if (m_parentWindow) {
 #ifdef WS_X11
