@@ -1175,31 +1175,30 @@ void Qarma::readStdIn()
             addItems(tw, input, twflags & 1, twflags & 1<<1, twflags & 1<<2);
         }
     } else if (m_type == Dzen) {
-        while (true) {
-            ba = gs_stdin->read(8192);
-            if (ba.isEmpty())
-                break;
-            newText = QString::fromLocal8Bit(ba);
-            if (newText.endsWith('\n'))
-                newText.resize(newText.length()-1);
-            input.append(newText.split('\n'));
-            if (ba.size() < 8192) /** @todo: if the input block is exactly 8kB, we're gonna wait for the next one here */
-                break;
-        }
-//        if (input.isEmpty())
-//            return;
         QLabel *header = m_dialog->findChild<QLabel*>("header");
         QLabel *body = m_dialog->findChild<QLabel*>("body");
         if (body) {
-            if (header->text().isEmpty() || m_dialog->property("unified").toBool())
+            const int lines = body->property("lines").toInt();
+            const bool unified = m_dialog->property("unified").toBool();
+            for (int i = unified ? 0 : 1; i < lines; ++i)
+                input.append(QString::fromLocal8Bit(gs_stdin->readLine()));
+//            qDebug() << input;
+            if (header->text().isEmpty() || unified) {
+//                qDebug() << header->text().isEmpty() << m_dialog->property("unified").toBool() << "set header text";
                 header->setText(input.takeFirst());
+            }
             if (!input.isEmpty()) {
+//                qDebug() << "have more input";
                 QStringList oldBody = body->text().split('\n');
+//                qDebug() << oldBody;
                 oldBody.append(input);
-                const int idx = qMax(0, oldBody.count() - body->property("lines").toInt());
+//                qDebug() << "=>" << oldBody;
+                const int idx = qMax(0, oldBody.count() - lines);
+//                qDebug() << "==>" << oldBody.mid(idx);
                 body->setText(oldBody.mid(idx).join('\n'));
             }
         } else {
+//            qDebug() << "just set header";
             header->setText(input.constLast());
         }
     }
@@ -1625,8 +1624,10 @@ char Qarma::showDzen(const QStringList &args)
     vl->addWidget(header = new QLabel(dlg));
     header->setObjectName("header");
     header->setAlignment(Qt::AlignCenter);
+    header->setMargin(6);
     vl->addWidget(body = new QLabel(dlg));
     body->setObjectName("body");
+    body->setMargin(8);
    
     
     QPalette pal = dlg->palette();
@@ -1650,13 +1651,6 @@ char Qarma::showDzen(const QStringList &args)
                 pal.setColor(cg, QPalette::Base, c);
                 pal.setColor(cg, QPalette::Window, c);
             }
-        } else if (args.at(i) == "-bg") {
-            QColor c(NEXT_ARG);
-            for (int i = 0; i < 3; ++i) { // Disabled, Active, Inactive, Normal
-                QPalette::ColorGroup cg = (QPalette::ColorGroup)i;
-                pal.setColor(cg, QPalette::Base, c);
-                pal.setColor(cg, QPalette::Window, c);
-            }
         } else if (args.at(i) == "-fn") {
             dlg->setFont(xftFont(NEXT_ARG));
         } else if (args.at(i) == "-ta" || args.at(i) == "-sa") {
@@ -1672,10 +1666,10 @@ char Qarma::showDzen(const QStringList &args)
             READ_INT(lines, UInt, "-l(ines) expects a positive integer as next value");
             body->setProperty("lines", lines);
         } else if (args.at(i) == "-x") {
-            READ_INT(x, UInt, "-x expects a positive integer as next value");
+            READ_INT(x, Int, "-x expects a positive integer as next value");
             m_pos.setX(x);
         } else if (args.at(i) == "-y") {
-            READ_INT(y, UInt, "-y expects a positive integer as next value");
+            READ_INT(y, Int, "-y expects a positive integer as next value");
             m_pos.setY(y);
         } else if (args.at(i) == "-w") {
             READ_INT(w, UInt, "-w expects a positive integer as next value");
@@ -1771,6 +1765,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--help-color-selection", tr("Show color selection options")) <<
                             Help("--help-password", tr("Show password dialog options")) <<
                             Help("--help-forms", tr("Show forms dialog options")) <<
+                            Help("--help-dzen", tr("Show dzen options")) <<
                             Help("--help-misc", tr("Show miscellaneous options")) <<
                             Help("--help-qt", tr("Show Qt Options")));
         helpDict["general"] = CategoryHelp(tr("General options"), HelpList() <<
@@ -1904,6 +1899,18 @@ void Qarma::printHelp(const QString &category)
                             Help("--separator=SEPARATOR", tr("Set output separator character")) <<
                             Help("--forms-date-format=PATTERN", tr("Set the format for the returned date")) <<
                             Help("--add-checkbox=Checkbox label", "QARMA ONLY! " + tr("Add a new Checkbox forms dialog")));
+        helpDict["dzen"] =  CategoryHelp(tr("Dzen options"), HelpList() <<
+                            Help("-fg <color>", tr("Set foreground color. Either as symbolic name (e.g. red, darkgreen, etc.) or as #rrggbb hex-value.")) <<
+                            Help("-bg <color>", tr("Set background color (same format as -fg).")) <<
+                            Help("-fn <font>", tr("Set font (using the format of xlsfonts and xfontsel).")) <<
+                            Help("-ta <l|c|r>", tr("Set alignement of title window content: l(eft), c(center) or r(ight).")) <<
+                            Help("-sa <l|c|r>", tr("Set alignment of slave window (see -ta ).")) <<
+                            Help("-l <lines>", tr("Number of lines to display in slave window.")) <<
+                            Help("-u", tr("Update contents of title and slave window simultaneously.")) <<
+                            Help("-p [<timeout>]", tr("Persist EOF (optional timeout in seconds).")) <<
+                            Help("-x <pixels>", tr("Set x position on the screen.")) <<
+                            Help("-y <pixels>", tr("Set y position on the screen.")) <<
+                            Help("-w <pixels>", tr("width")));
         helpDict["misc"] = CategoryHelp(tr("Miscellaneous options"), HelpList() <<
                             Help("--about", tr("About Qarma")) <<
                             Help("--version", tr("Print version")));
@@ -1927,6 +1934,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--font-selection", "QARMA ONLY! " + tr("Display font selection dialog")) <<
                             Help("--password", tr("Display password dialog")) <<
                             Help("--forms", tr("Display forms dialog")) <<
+                            Help("--dzen", "QARMA ONLY! " + tr("Somewhat dzen compatible label")) <<
                             Help("--display=DISPLAY", tr("X display to use")) <<
                             Help("--class=CLASS", tr("Program class as used by the window manager")) <<
                             Help("--name=NAME", tr("Program name as used by the window manager")));
