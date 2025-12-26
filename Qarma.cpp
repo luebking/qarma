@@ -24,6 +24,7 @@
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QCryptographicHash>
 #include <QDate>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
@@ -34,6 +35,7 @@
 #include <QFontDialog>
 #include <QFormLayout>
 #include <QIcon>
+#include <QImageReader>
 #include <QInputDialog>
 #include <QLabel>
 #include <QLocale>
@@ -42,12 +44,15 @@
 #include <QProcess>
 #include <QProgressDialog>
 #include <QPropertyAnimation>
+#include <QProxyStyle>
 #include <QPushButton>
 #include <QScreen>
 #include <QScrollBar>
 #include <QSettings>
 #include <QSlider>
 #include <QSocketNotifier>
+#include <QSplitter>
+#include <QStandardPaths>
 #include <QStringBuilder>
 #include <QStringList>
 #include <QTextBrowser>
@@ -785,6 +790,83 @@ char Qarma::showMessage(const QStringList &args, char type)
     return 0;
 }
 
+QPixmap thumbnail(const QString &path, uint size)
+{
+    size = qMin(size, 1024u);
+    QImage thumb;
+    QImageReader thumbReader;
+    thumbReader.setFileName(path);
+    if (!thumbReader.canRead())
+        return QPixmap();
+
+    thumbReader.setQuality(50);
+    QSize sz = thumbReader.size();
+    QSize origSz = sz;
+    bool skipThumbnail = sz.width()*sz.height() < 1920*1200+1;
+
+    if (skipThumbnail) {
+        sz.scale(QSize(size,size), Qt::KeepAspectRatio);
+        thumbReader.setScaledSize(sz);
+    } else {
+        QFileInfo info(path);
+        QString canonicalPath = info.canonicalFilePath();
+        if (canonicalPath.isEmpty())
+            canonicalPath = info.absoluteFilePath();
+        QUrl url = QUrl::fromLocalFile(canonicalPath);
+        QCryptographicHash md5(QCryptographicHash::Md5);
+        md5.addData(QFile::encodeName(url.adjusted(QUrl::RemovePassword).url()));
+
+        QString folder;
+        uint tSize;
+        if (size <= 128) {
+            tSize = 128; folder = "normal/";
+        } else if (size <= 256) {
+            tSize = 256; folder = "large/";
+        } else if (size <= 512) {
+            tSize = 512; folder = "x-large/";
+        } else {
+            tSize = 1024; folder = "xx-large/";
+        }
+        Q_UNUSED(tSize);
+
+        const QString thumbPath = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) +
+                                                                    QLatin1String("/thumbnails/") + folder +
+                                                                    QString::fromLatin1(md5.result().toHex()) + QStringLiteral(".png");
+        QFileInfo tInfo(thumbPath);
+        if (tInfo.exists() && info.metadataChangeTime() <= tInfo.lastModified() && info.lastModified() <= tInfo.lastModified()) {
+            thumbReader.setFileName(thumbPath);
+            sz.scale(QSize(size,size), Qt::KeepAspectRatio);
+            thumbReader.setScaledSize(sz);
+            if (thumbReader.read(&thumb)) {
+                int w = thumb.text("Thumb::Image::Width").toInt();
+                int h = thumb.text("Thumb::Image::Height").toInt();
+                if (origSz == QSize(w, h))
+                    return QPixmap::fromImage(thumb);
+            }
+        }
+        thumbReader.setFileName(path);
+//        sz.scale(QSize(tSize,tSize), Qt::KeepAspectRatio); // in case we'll ever store the thumbnail
+        sz.scale(QSize(size,size), Qt::KeepAspectRatio);
+        thumbReader.setScaledSize(sz);
+    }
+    if (!thumbReader.read(&thumb))
+        return QPixmap();
+//    if (skipThumbnail)
+        return QPixmap::fromImage(thumb);
+}
+
+class DblClckStyle : public QProxyStyle
+{
+  public:
+    int styleHint(StyleHint hint, const QStyleOption *option = nullptr,
+                  const QWidget *widget = nullptr, QStyleHintReturn *returnData = nullptr) const override
+    {
+        if (hint == QStyle::SH_ItemView_ActivateItemOnSingleClick)
+            return false;
+        return QProxyStyle::styleHint(hint, option, widget, returnData);
+    }
+};
+
 char Qarma::showFileSelection(const QStringList &args)
 {
     QFileDialog *dlg = new QFileDialog;
@@ -827,6 +909,17 @@ char Qarma::showFileSelection(const QStringList &args)
             if (idx > -1)
                 mimeFilter = mimeFilter.left(idx).trimmed() + " (" + mimeFilter.mid(idx+1).trimmed() + ")";
             mimeFilters << mimeFilter;
+        } else if (args.at(i) == "--preview-images") {
+            READ_INT(size, UInt, "--preview-images must be followed by a positive number for the thumbnail size");
+            dlg->setOption(QFileDialog::DontUseNativeDialog);
+            if (QSplitter *splitter = dlg->findChild<QSplitter*>()) {
+                qApp->setStyle(new DblClckStyle);
+                QLabel *preview = new QLabel(splitter);
+                splitter->addWidget(preview);
+                connect(dlg, &QFileDialog::currentChanged, [=](const QString &path) {
+                    preview->setPixmap(thumbnail(path, size));
+                });
+            }
         }
         else { WARN_UNKNOWN_ARG("--file-selection") }
     }
@@ -1815,7 +1908,8 @@ void Qarma::printHelp(const QString &category)
                             Help("--save", tr("Activate save mode")) <<
                             Help("--separator=SEPARATOR", tr("Set output separator character")) <<
                             Help("--confirm-overwrite", tr("Confirm file selection if filename already exists")) <<
-                            Help("--file-filter=NAME | PATTERN1 PATTERN2 ...", tr("Sets a filename filter")));
+                            Help("--file-filter=NAME | PATTERN1 PATTERN2 ...", tr("Sets a filename filter")) <<
+                            Help("--preview-images=SIZE", "QARMA ONLY! " + tr("Show image thumbnails of SIZE")));
         helpDict["list"] = CategoryHelp(tr("List Command\n  %1 --list [Options] [Item1 ...]\nList Options").arg(applicationName()), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--column=COLUMN", tr("Set the column header")) <<
