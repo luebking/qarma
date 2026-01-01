@@ -549,10 +549,24 @@ void Qarma::dialogFinished(int status)
             QTreeWidget *tw = sender()->findChild<QTreeWidget*>();
             QStringList result;
             if (tw) {
+                QVariant v = sender()->property("qarma_print_column");
+                int column = v.toString() == "ALL" ? -1 : v.toInt();
+                if (column > tw->columnCount())
+                    column = -1;
+                else if (column > 0)
+                    --column;
                 bool done(false);
                 foreach (const QTreeWidgetItem *twi, tw->selectedItems()) {
                     done = true;
-                    result << twi->text(0);
+                    QString s;
+                    if (column > -1)
+                        s = twi->text(column);
+                    else {
+                        for (int i = 0; i < tw->columnCount()-1; ++i)
+                            s += twi->text(i) + '\t';
+                        s += twi->text(tw->columnCount()-1);
+                    }
+                    result << s;
                 }
                 if (!done) { // checkable
                     for (int i = 0; i < tw->topLevelItemCount(); ++i) {
@@ -1012,7 +1026,7 @@ char Qarma::showList(const QStringList &args)
             if (ok)
                 hiddenCols << v-1;
         } else if (args.at(i) == "--print-column") {
-            qWarning("TODO: --print-column");
+            dlg->setProperty("qarma_print_column", NEXT_ARG);
         } else if (args.at(i) == "--checklist") {
             tw->setSelectionMode(QAbstractItemView::NoSelection);
             tw->setAllColumnsShowFocus(false);
