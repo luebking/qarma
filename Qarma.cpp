@@ -1634,9 +1634,21 @@ char Qarma::showForms(const QStringList &args)
     QStringList lastListValues, lastListColumns, lastComboValues;
     bool lastListHeader(false);
     QComboBox *lastCombo = NULL;
+    QLineEdit *lastEntry = nullptr;
+    QString lastEntryValue;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--add-entry") {
-            fl->addRow(NEXT_ARG, new QLineEdit(dlg));
+            fl->addRow(NEXT_ARG, lastEntry = new QLineEdit(dlg));
+            lastEntry->setText(lastEntryValue);
+            lastEntry->setPlaceholderText(lastEntryValue);
+        } else if (args.at(i) == "--entry-value") {
+            lastEntryValue = NEXT_ARG;
+            if (lastEntry) {
+                lastEntry->setText(lastEntryValue);
+                lastEntry->setPlaceholderText(lastEntryValue);
+                lastEntryValue.clear();
+                lastEntry = nullptr;
+            }
         } else if (args.at(i) == "--add-password") {
             QLineEdit *le;
             fl->addRow(NEXT_ARG, le = new QLineEdit(dlg));
@@ -1995,6 +2007,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--prompt=TEXT", "QARMA ONLY! " + tr("The prompt for the user")));
         helpDict["forms"] = CategoryHelp(tr("Forms dialog options"), HelpList() <<
                             Help("--add-entry=Field name", tr("Add a new Entry in forms dialog")) <<
+                            Help("--entry-value=TEXT", "QARMA ONLY! " + tr("Preset text for the last entry")) <<
                             Help("--add-password=Field name", tr("Add a new Password Entry in forms dialog")) <<
                             Help("--add-calendar=Calendar field name", tr("Add a new Calendar in forms dialog")) <<
                             Help("--add-list=List field and header name", tr("Add a new List in forms dialog")) <<
