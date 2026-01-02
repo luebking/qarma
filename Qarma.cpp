@@ -563,23 +563,24 @@ void Qarma::dialogFinished(int status)
                 else if (column > 0)
                     --column;
                 bool done(false);
+                auto text = [=](const QTreeWidgetItem *twi, int col, int offset) {
+                    if (col > -1)
+                        return (col < offset) ? QString() : twi->text(col);
+                    QString s;
+                    for (int i = offset; i < tw->columnCount()-1; ++i)
+                        s += twi->text(i) + '\t';
+                    s += twi->text(tw->columnCount()-1);
+                    return s;
+                };
                 foreach (const QTreeWidgetItem *twi, tw->selectedItems()) {
                     done = true;
-                    QString s;
-                    if (column > -1)
-                        s = twi->text(column);
-                    else {
-                        for (int i = 0; i < tw->columnCount()-1; ++i)
-                            s += twi->text(i) + '\t';
-                        s += twi->text(tw->columnCount()-1);
-                    }
-                    result << s;
+                    result << text(twi, column, 0);
                 }
                 if (!done) { // checkable
                     for (int i = 0; i < tw->topLevelItemCount(); ++i) {
                         const QTreeWidgetItem *twi = tw->topLevelItem(i);
                         if (twi->checkState(0) == Qt::Checked)
-                            result << twi->text(1);
+                            result << text(twi, column, 1);
                     }
                 }
             }
