@@ -1064,8 +1064,10 @@ char Qarma::showList(const QStringList &args)
     if (values.isEmpty())
         listenToStdIn();
 
-    if (checkable)
+    if (checkable) {
+        tw->setCurrentItem(nullptr);
         editable = false;
+    }
 
     tw->setProperty("qarma_list_flags", int(editable | checkable << 1 | icons << 2));
 
