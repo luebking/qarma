@@ -801,6 +801,13 @@ char Qarma::showMessage(const QStringList &args, char type)
     if (QLabel *l = dlg->findChild<QLabel*>("qt_msgbox_label")) {
         l->setWordWrap(wrap);
         l->setTextFormat(html ? Qt::RichText : Qt::PlainText);
+/*        if (!wrap) {
+            if (QGridLayout *gl = qobject_cast<QGridLayout*>(dlg->layout())) {
+                gl->addItem(new QSpacerItem(2000,100), gl->rowCount(), 0, 1, gl->columnCount());
+                gl->update();
+            }
+            dlg->setFixedSize(2000, 400);
+        }*/
         if (m_selectableLabel)
             l->setTextInteractionFlags(l->textInteractionFlags()|Qt::TextSelectableByMouse);
     }
