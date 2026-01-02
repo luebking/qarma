@@ -75,6 +75,10 @@
 #include <unistd.h>
 #endif
 
+#define QARMA_VERSION "1.1.0"
+#define ZENITY_VERSION "4.2.1"
+
+
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
     #define SKIP_EMPTY Qt::SkipEmptyParts
 #else
@@ -276,6 +280,9 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         } else if (arg == "--dzen") {
             m_type = Dzen;
             error = showDzen(args);
+        } else if (arg == "--version") {
+            printf("%s\n", m_zenity ? ZENITY_VERSION : QARMA_VERSION);
+            exit(0);
         }
         if (error != 1) {
             break;
@@ -2036,8 +2043,16 @@ void Qarma::printHelp(const QString &category)
                             Help("--about", tr("About Qarma")) <<
                             Help("--version", tr("Print version")));
         helpDict["qt"] = CategoryHelp(tr("Qt options"), HelpList() <<
-                            Help("--foo", tr("Foo")) <<
-                            Help("--bar", tr("Bar")));
+                            Help("-platform <platformName[:options]>", tr("specifies the Qt Platform Abstraction (QPA) plugin")) <<
+                            Help("-platformpluginpath <path>", tr("specifies the path to platform plugins")) <<
+                            Help("-platformtheme <platformTheme>", tr("specifies the platform theme")) <<
+                            Help("-plugin <plugin>", tr("specifies additional plugins to load. Can appear multiple times")) <<
+                            Help("-qwindowgeometry <WxH+X+Y>", tr("specifies window geometry for the main window")) <<
+                            Help("-qwindowicon <icon>", tr("sets the default window icon")) <<
+                            Help("-qwindowtitle <title>", tr("sets the title of the first window")) <<
+                            Help("-reverse", tr("sets the application's layout direction to Qt::RightToLeft")) <<
+                            Help("-display <hostname:screen_number>", tr("switches displays on X11")) <<
+                            Help("-geometry <WxH+X+Y>", tr("same as -qwindowgeometry")));
         helpDict["application"] = CategoryHelp(tr("Application Options"), HelpList() <<
                             Help("--calendar", tr("Display calendar dialog")) <<
                             Help("--entry", tr("Display text entry dialog")) <<
