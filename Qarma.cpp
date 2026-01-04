@@ -1933,14 +1933,14 @@ void Qarma::printHelp(const QString &category)
         helpDict["error"] = CategoryHelp(tr("Error options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
-                            Help("--no-wrap", tr("Do not enable text wrapping")) <<
+                            Help("--no-wrap", tr("Do not enable text wrapping, NB. QMessageBox applies hard size limits, breaking this feature")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
                             Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["info"] = CategoryHelp(tr("Info options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
-                            Help("--no-wrap", tr("Do not enable text wrapping")) <<
+                            Help("--no-wrap", tr("Do not enable text wrapping, NB. QMessageBox applies hard size limits, breaking this feature")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
                             Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
@@ -1981,7 +1981,7 @@ void Qarma::printHelp(const QString &category)
         helpDict["question"] = CategoryHelp(tr("Question options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
-                            Help("--no-wrap", tr("Do not enable text wrapping")) <<
+                            Help("--no-wrap", tr("Do not enable text wrapping, NB. QMessageBox applies hard size limits, breaking this feature")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
                             Help("--default-cancel", tr("Give cancel button focus by default")) <<
                             Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
@@ -1989,7 +1989,7 @@ void Qarma::printHelp(const QString &category)
         helpDict["warning"] = CategoryHelp(tr("Warning options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
-                            Help("--no-wrap", tr("Do not enable text wrapping")) <<
+                            Help("--no-wrap", tr("Do not enable text wrapping, NB. QMessageBox applies hard size limits, breaking this feature")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
                             Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
