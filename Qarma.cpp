@@ -798,24 +798,58 @@ char Qarma::showMessage(const QStringList &args, char type)
                                                 args.at(i) != "--warning" && args.at(i) != "--error")
             qDebug() << "unspecific argument" << args.at(i);
     }
-    if (QLabel *l = dlg->findChild<QLabel*>("qt_msgbox_label")) {
-        l->setWordWrap(wrap);
-        l->setTextFormat(html ? Qt::RichText : Qt::PlainText);
-/*        if (!wrap) {
-            if (QGridLayout *gl = qobject_cast<QGridLayout*>(dlg->layout())) {
-                gl->addItem(new QSpacerItem(2000,100), gl->rowCount(), 0, 1, gl->columnCount());
-                gl->update();
-            }
-            dlg->setFixedSize(2000, 400);
-        }*/
+    QLabel *msgLabel = dlg->findChild<QLabel*>("qt_msgbox_label");
+    if (msgLabel) {
+        // this is pointless because QMessageBox fucks around with that when applying its size constraints, see below
+//        msgLabel->setWordWrap(wrap);
+        msgLabel->setTextFormat(html ? Qt::RichText : Qt::PlainText);
         if (m_selectableLabel)
-            l->setTextInteractionFlags(l->textInteractionFlags()|Qt::TextSelectableByMouse);
+            msgLabel->setTextInteractionFlags(msgLabel->textInteractionFlags()|Qt::TextSelectableByMouse);
     }
     if (dlg->iconPixmap().isNull())
         dlg->setIcon(type == 'w' ? QMessageBox::Warning :
                    (type == 'q' ? QMessageBox::Question :
                    (type == 'e' ? QMessageBox::Critical : QMessageBox::Information)));
     SHOW_DIALOG
+    // **** grrrrrrrr *****
+    // https://github.com/luebking/qarma/issues/62
+    // https://runebook.dev/en/docs/qt/qmessagebox/resizeEvent
+    // the suggested spacer however doesn't work, but Qt allows us to fix the size after the show event
+    //
+    // still a lousy hack which might run into windowmanager related problems
+    bool forceSize = false;
+    if (!wrap && msgLabel) {
+        forceSize = true;
+        // figure the dimensions of the dialog if the label wasn't there
+        QLabel *icnLabel = dlg->findChild<QLabel*>("qt_msgboxex_icon_label");
+        QSize delta = msgLabel->size();
+        // we need to account for the icon left of the label - if that's taller than the label
+        // it dictates the labels effective height
+        if (icnLabel)
+            delta.setHeight(qMax(delta.height(), icnLabel->height()));
+        // delta is now the virtual label size, subtract if from the dialog
+        delta = dlg->size() - delta;
+        QRect r = msgLabel->fontMetrics().boundingRect(msgLabel->text());
+        // if there's an icon, our new label, regardless of the widths sufficient for one unwrapped line, gets at least its height
+        if (icnLabel)
+            r.setHeight(qMax(r.height(), icnLabel->height()));
+        dlg->setFixedSize(delta + r.size());
+    }
+    // likewise we can apply --width/--height
+    if (!m_size.isNull()) {
+        forceSize = true;
+        QSize sz = dlg->size();
+        if (m_size.width() > 0)
+            sz.setWidth(m_size.width());
+        if (m_size.height() > 0)
+            sz.setHeight(m_size.height());
+        dlg->setFixedSize(sz);
+    }
+    // here's the catch - the WM migth think the pre-showing size is mandatory
+    // (probably race condition between window mapping and the size fix and the WM handling client messages)
+    // so we briefly wait (100ms is a complete random time) and set the current size again to get the WM up to speed
+    if (forceSize)
+        QTimer::singleShot(100, this, [=]() {dlg->setFixedSize(dlg->size());});
     return 0;
 }
 
@@ -1933,14 +1967,14 @@ void Qarma::printHelp(const QString &category)
         helpDict["error"] = CategoryHelp(tr("Error options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
-                            Help("--no-wrap", tr("Do not enable text wrapping, NB. QMessageBox applies hard size limits, breaking this feature")) <<
+                            Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
                             Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["info"] = CategoryHelp(tr("Info options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
-                            Help("--no-wrap", tr("Do not enable text wrapping, NB. QMessageBox applies hard size limits, breaking this feature")) <<
+                            Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
                             Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
@@ -1981,7 +2015,7 @@ void Qarma::printHelp(const QString &category)
         helpDict["question"] = CategoryHelp(tr("Question options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
-                            Help("--no-wrap", tr("Do not enable text wrapping, NB. QMessageBox applies hard size limits, breaking this feature")) <<
+                            Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
                             Help("--default-cancel", tr("Give cancel button focus by default")) <<
                             Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
@@ -1989,7 +2023,7 @@ void Qarma::printHelp(const QString &category)
         helpDict["warning"] = CategoryHelp(tr("Warning options"), HelpList() <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--icon-name=ICON-NAME", tr("Set the dialog icon")) <<
-                            Help("--no-wrap", tr("Do not enable text wrapping, NB. QMessageBox applies hard size limits, breaking this feature")) <<
+                            Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
                             Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
