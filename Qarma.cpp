@@ -817,9 +817,7 @@ char Qarma::showMessage(const QStringList &args, char type)
     // the suggested spacer however doesn't work, but Qt allows us to fix the size after the show event
     //
     // still a lousy hack which might run into windowmanager related problems
-    bool forceSize = false;
-    if (!wrap && msgLabel) {
-        forceSize = true;
+    if (!(wrap && m_size.isNull()) && msgLabel) {
         // figure the dimensions of the dialog if the label wasn't there
         QLabel *icnLabel = dlg->findChild<QLabel*>("qt_msgboxex_icon_label");
         QSize delta = msgLabel->size();
@@ -829,27 +827,34 @@ char Qarma::showMessage(const QStringList &args, char type)
             delta.setHeight(qMax(delta.height(), icnLabel->height()));
         // delta is now the virtual label size, subtract if from the dialog
         delta = dlg->size() - delta;
-        QRect r = msgLabel->fontMetrics().boundingRect(msgLabel->text());
+        QRect r;
+        if (!wrap) {
+            r = msgLabel->fontMetrics().boundingRect(msgLabel->text());
+        } else if (m_size.width() < 1 || m_size.height() < 1) {
+            // likewise we can apply unilateral --width/--height
+            r = QRect(0,0,QWIDGETSIZE_MAX,QWIDGETSIZE_MAX);
+            if (m_size.width() > 0)
+                r.setWidth(m_size.width() - delta.width());
+            r = msgLabel->fontMetrics().boundingRect(r, Qt::TextWordWrap, msgLabel->text());
+            if (m_size.height() > 0) {
+                // for only fixed height, calculate the line count and overguess the necessary columns
+                r.setHeight(m_size.height() - delta.height());
+                int lines = qMax(1, r.height()/msgLabel->fontMetrics().lineSpacing());
+                r.setWidth(3*r.width()/(2*lines)); // generous 50% overhead to account for word wrapping, better the dialog is a bit wider than missing text
+            }
+        } else { // or completely fixed size
+            r.setSize(m_size);
+            delta = QSize(0,0);
+        }
         // if there's an icon, our new label, regardless of the widths sufficient for one unwrapped line, gets at least its height
         if (icnLabel)
             r.setHeight(qMax(r.height(), icnLabel->height()));
         dlg->setFixedSize(delta + r.size());
-    }
-    // likewise we can apply --width/--height
-    if (!m_size.isNull()) {
-        forceSize = true;
-        QSize sz = dlg->size();
-        if (m_size.width() > 0)
-            sz.setWidth(m_size.width());
-        if (m_size.height() > 0)
-            sz.setHeight(m_size.height());
-        dlg->setFixedSize(sz);
-    }
-    // here's the catch - the WM migth think the pre-showing size is mandatory
-    // (probably race condition between window mapping and the size fix and the WM handling client messages)
-    // so we briefly wait (100ms is a complete random time) and set the current size again to get the WM up to speed
-    if (forceSize)
+        // here's the catch - the WM migth think the pre-showing size is mandatory
+        // (probably race condition between window mapping and the size fix and the WM handling client messages)
+        // so we briefly wait (100ms is a complete random time) and set the current size again to get the WM up to speed
         QTimer::singleShot(100, this, [=]() {dlg->setFixedSize(dlg->size());});
+    }
     return 0;
 }
 
