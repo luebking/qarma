@@ -189,6 +189,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_type(Invalid)
 {
     m_pos = QPoint(INT_MAX, INT_MAX); // invalid
+    m_size = QSize(0,0); // so we can reasonably use isNull …
     QStringList argList = QCoreApplication::arguments(); // arguments() is slow
     const QString binary = argList.at(0);
     m_zenity = binary.endsWith("zenity");
@@ -818,6 +819,10 @@ char Qarma::showMessage(const QStringList &args, char type)
     //
     // still a lousy hack which might run into windowmanager related problems
     if (!(wrap && m_size.isNull()) && msgLabel) {
+        if (m_size.width() > 0 && dlg->width() <= 500) {
+            // QMessageBox unconditionally disables wrapping for dialogs < 500px width, so don't try to shrink those
+            m_size.setWidth(qMax(m_size.width(), dlg->width()));
+        }
         // figure the dimensions of the dialog if the label wasn't there
         QLabel *icnLabel = dlg->findChild<QLabel*>("qt_msgboxex_icon_label");
         QSize delta = msgLabel->size();
@@ -828,6 +833,7 @@ char Qarma::showMessage(const QStringList &args, char type)
         // delta is now the virtual label size, subtract if from the dialog
         delta = dlg->size() - delta;
         QRect r;
+        QMargins marge = msgLabel->contentsMargins() + QMargins(4,4,4,4);
         if (!wrap) {
             r = msgLabel->fontMetrics().boundingRect(msgLabel->text());
         } else if (m_size.width() < 1 || m_size.height() < 1) {
@@ -845,7 +851,11 @@ char Qarma::showMessage(const QStringList &args, char type)
         } else { // or completely fixed size
             r.setSize(m_size);
             delta = QSize(0,0);
+            marge = QMargins();
         }
+        m_size = QSize(0,0); // reset so the global size adjustment doesn't apply
+        r.setWidth(r.width() + marge.left()+marge.right());
+        r.setHeight(r.height() + marge.top()+marge.bottom());
         // if there's an icon, our new label, regardless of the widths sufficient for one unwrapped line, gets at least its height
         if (icnLabel)
             r.setHeight(qMax(r.height(), icnLabel->height()));
@@ -853,7 +863,9 @@ char Qarma::showMessage(const QStringList &args, char type)
         // here's the catch - the WM migth think the pre-showing size is mandatory
         // (probably race condition between window mapping and the size fix and the WM handling client messages)
         // so we briefly wait (100ms is a complete random time) and set the current size again to get the WM up to speed
-        QTimer::singleShot(100, this, [=]() {dlg->setFixedSize(dlg->size());});
+        for (int ms = 2; ms < 150; ms*=2) {
+            QTimer::singleShot(ms, this, [=]() {dlg->setFixedSize(delta + r.size());});
+        }
     }
     return 0;
 }
@@ -1946,8 +1958,8 @@ void Qarma::printHelp(const QString &category)
         helpDict["general"] = CategoryHelp(tr("General options"), HelpList() <<
                             Help("--title=TITLE", tr("Set the dialog title")) <<
                             Help("--window-icon=ICONPATH", tr("Set the window icon")) <<
-                            Help("--width=WIDTH", tr("Set the width")) <<
-                            Help("--height=HEIGHT", tr("Set the height")) <<
+                            Help("--width=WIDTH", tr("Set the width") + tr(" (not entirely deterministic for message dialogs")) <<
+                            Help("--height=HEIGHT", tr("Set the height") + tr(" (not entirely deterministic for message dialogs")) <<
                             Help("--pos=[+-]x[(+-)y]", "QARMA ONLY! " + tr("Set the position")) <<
                             Help("--timeout=TIMEOUT", tr("Set dialog timeout in seconds")) <<
                             Help("--ok-label=TEXT", tr("Sets the label of the Ok button")) <<
