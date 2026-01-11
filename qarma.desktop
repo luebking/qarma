@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=qarma
+Comment=Zenity Clone for Qt4/Qt5 
+Exec=qarma
+Icon=qarma
+Terminal=true
+Type=Application
+Categories=Utility;
