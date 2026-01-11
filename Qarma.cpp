@@ -1958,8 +1958,8 @@ void Qarma::printHelp(const QString &category)
         helpDict["general"] = CategoryHelp(tr("General options"), HelpList() <<
                             Help("--title=TITLE", tr("Set the dialog title")) <<
                             Help("--window-icon=ICONPATH", tr("Set the window icon")) <<
-                            Help("--width=WIDTH", tr("Set the width") + tr(" (not entirely deterministic for message dialogs")) <<
-                            Help("--height=HEIGHT", tr("Set the height") + tr(" (not entirely deterministic for message dialogs")) <<
+                            Help("--width=WIDTH", tr("Set the width") + tr(" (not entirely deterministic for message dialogs)")) <<
+                            Help("--height=HEIGHT", tr("Set the height") + tr(" (not entirely deterministic for message dialogs)")) <<
                             Help("--pos=[+-]x[(+-)y]", "QARMA ONLY! " + tr("Set the position")) <<
                             Help("--timeout=TIMEOUT", tr("Set dialog timeout in seconds")) <<
                             Help("--ok-label=TEXT", tr("Sets the label of the Ok button")) <<
