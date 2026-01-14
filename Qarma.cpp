@@ -26,9 +26,11 @@
 #include <QComboBox>
 #include <QCryptographicHash>
 #include <QDate>
+#ifdef DBUS_ENABLED
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusInterface>
+#endif
 #include <QDialogButtonBox>
 #include <QEvent>
 #include <QFileDialog>
@@ -1150,6 +1152,7 @@ char Qarma::showList(const QStringList &args)
 
 void Qarma::notify(const QString message, bool noClose)
 {
+#ifdef DBUS_ENABLED
     if (QDBusConnection::sessionBus().interface()->isServiceRegistered("org.freedesktop.Notifications")) {
         QDBusInterface notifications("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications");
         const QString summary = (message.length() < 32) ? message : message.left(25) + "...";
@@ -1181,6 +1184,7 @@ void Qarma::notify(const QString message, bool noClose)
     SHOW_DIALOG
     dlg->adjustSize();
     dlg->move(QGuiApplication::screens().at(0)->availableGeometry().topRight() - QPoint(dlg->width() + 20, -20));
+#endif
 }
 
 char Qarma::showNotification(const QStringList &args)
