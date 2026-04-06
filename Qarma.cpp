@@ -560,11 +560,14 @@ void Qarma::dialogFinished(int status)
             QStringList result;
             if (tw) {
                 QVariant v = sender()->property("qarma_print_column");
-                int column = v.toString() == "ALL" ? -1 : v.toInt();
-                if (column > tw->columnCount())
-                    column = -1;
-                else if (column > 0)
-                    --column;
+                int column = 1;
+                if (v.isValid()) {
+                    column = v.toString() == "ALL" ? -1 : v.toInt();
+                    if (column > tw->columnCount())
+                        column = -1;
+                    else if (column > 0)
+                        --column;
+                }
                 bool done(false);
                 auto text = [=](const QTreeWidgetItem *twi, int col, int offset) {
                     if (col > -1)
