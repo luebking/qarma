@@ -1709,17 +1709,17 @@ char Qarma::showForms(const QStringList &args)
     QStringList lastListValues, lastListColumns, lastComboValues;
     bool lastListHeader(false);
     QComboBox *lastCombo = nullptr, *lastCombo4V = nullptr;
-    QWidget *lastEntry = nullptr;
+    QWidget *lastEntry = nullptr, *lastWidget = nullptr;
     QString lastEntryValue;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--add-entry") {
             QLineEdit *lastLineEdit;
-            fl->addRow(NEXT_ARG, lastEntry = lastLineEdit = new QLineEdit(dlg));
+            fl->addRow(NEXT_ARG, lastWidget = lastEntry = lastLineEdit = new QLineEdit(dlg));
             lastLineEdit->setText(lastEntryValue);
             lastLineEdit->setPlaceholderText(lastEntryValue);
         } else if (args.at(i) == "--add-multiline-entry") {
             QTextEdit *lastTextEdit;
-            fl->addRow(NEXT_ARG, lastEntry = lastTextEdit = new QTextEdit(dlg));
+            fl->addRow(NEXT_ARG, lastWidget = lastEntry = lastTextEdit = new QTextEdit(dlg));
             lastTextEdit->setText(lastEntryValue);
             lastTextEdit->setPlaceholderText(lastEntryValue);
         } else if (args.at(i) == "--entry-value") {
@@ -1738,19 +1738,19 @@ char Qarma::showForms(const QStringList &args)
             }
         } else if (args.at(i) == "--add-password") {
             QLineEdit *le;
-            fl->addRow(NEXT_ARG, le = new QLineEdit(dlg));
+            fl->addRow(NEXT_ARG, lastWidget = le = new QLineEdit(dlg));
             le->setEchoMode(QLineEdit::Password);
         } else if (args.at(i) == "--add-calendar") {
-            fl->addRow(NEXT_ARG, new QCalendarWidget(dlg));
+            fl->addRow(NEXT_ARG, lastWidget = new QCalendarWidget(dlg));
         } else if (args.at(i) == "--add-list") {
             buildList(&lastList, lastListValues, lastListColumns, lastListHeader);
-            fl->addRow(NEXT_ARG, lastList = new QTreeWidget(dlg));
+            fl->addRow(NEXT_ARG, lastWidget = lastList = new QTreeWidget(dlg));
         } else if (args.at(i) == "--list-values") {
             lastListValues = NEXT_ARG.split('|');
         } else if (args.at(i) == "--column-values") {
             lastListColumns = NEXT_ARG.split('|');
         } else if (args.at(i) == "--add-combo") {
-            fl->addRow(NEXT_ARG, lastCombo4V = lastCombo = new QComboBox(dlg));
+            fl->addRow(NEXT_ARG, lastWidget = lastCombo4V = lastCombo = new QComboBox(dlg));
             lastCombo->addItems(lastComboValues);
             lastComboValues.clear();
         } else if (args.at(i) == "--combo-values") {
@@ -1777,7 +1777,13 @@ char Qarma::showForms(const QStringList &args)
         } else if (args.at(i) == "--forms-date-format") {
             dlg->setProperty("qarma_date_format", NEXT_ARG);
         } else if (args.at(i) == "--add-checkbox") {
-            fl->addRow(new QCheckBox(NEXT_ARG, dlg));
+            fl->addRow(lastWidget = new QCheckBox(NEXT_ARG, dlg));
+        } else if (args.at(i) == "--tooltip") {
+            const QString tip = NEXT_ARG;
+            if (lastWidget) {
+                lastWidget->setToolTip(tip);
+                lastWidget = nullptr;
+            }
         } else { WARN_UNKNOWN_ARG("--forms") }
     }
     buildList(&lastList, lastListValues, lastListColumns, lastListHeader);
@@ -2115,6 +2121,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--combo-default=Value", "QARMA ONLY! " + tr("The default value of the last added combo box")) <<
                             Help("--combo-free-entry", "QARMA ONLY! " + tr("Allow to enter values not in the list the last added combo box")) <<
                             Help("--show-header", tr("Show the columns header")) <<
+                            Help("--tooltip=ToolTip", "QARMA ONLY! " + tr("Add a tooltip to the previous element")) <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--separator=SEPARATOR", tr("Set output separator character")) <<
                             Help("--forms-date-format=PATTERN", tr("Set the format for the returned date")) <<
