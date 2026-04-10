@@ -1709,18 +1709,30 @@ char Qarma::showForms(const QStringList &args)
     QStringList lastListValues, lastListColumns, lastComboValues;
     bool lastListHeader(false);
     QComboBox *lastCombo = NULL;
-    QLineEdit *lastEntry = nullptr;
+    QWidget *lastEntry = nullptr;
     QString lastEntryValue;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--add-entry") {
-            fl->addRow(NEXT_ARG, lastEntry = new QLineEdit(dlg));
-            lastEntry->setText(lastEntryValue);
-            lastEntry->setPlaceholderText(lastEntryValue);
+            QLineEdit *lastLineEdit;
+            fl->addRow(NEXT_ARG, lastEntry = lastLineEdit = new QLineEdit(dlg));
+            lastLineEdit->setText(lastEntryValue);
+            lastLineEdit->setPlaceholderText(lastEntryValue);
+        } else if (args.at(i) == "--add-multiline-entry") {
+            QTextEdit *lastTextEdit;
+            fl->addRow(NEXT_ARG, lastEntry = lastTextEdit = new QTextEdit(dlg));
+            lastTextEdit->setText(lastEntryValue);
+            lastTextEdit->setPlaceholderText(lastEntryValue);
         } else if (args.at(i) == "--entry-value") {
             lastEntryValue = NEXT_ARG;
             if (lastEntry) {
-                lastEntry->setText(lastEntryValue);
-                lastEntry->setPlaceholderText(lastEntryValue);
+                if (QLineEdit *lastLineEdit = qobject_cast<QLineEdit*>(lastEntry)) {
+                    lastLineEdit->setText(lastEntryValue);
+                    lastLineEdit->setPlaceholderText(lastEntryValue);
+                }
+                else if (QTextEdit *lastTextEdit = qobject_cast<QTextEdit*>(lastEntry)) {
+                    lastTextEdit->setText(lastEntryValue);
+                    lastTextEdit->setPlaceholderText(lastEntryValue);
+                }
                 lastEntryValue.clear();
                 lastEntry = nullptr;
             }
@@ -2083,6 +2095,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--prompt=TEXT", "QARMA ONLY! " + tr("The prompt for the user")));
         helpDict["forms"] = CategoryHelp(tr("Forms dialog options"), HelpList() <<
                             Help("--add-entry=Field name", tr("Add a new Entry in forms dialog")) <<
+                            Help("--add-multiline-entry=Field name", tr("Add a new multiline Entry in forms dialog")) <<
                             Help("--entry-value=TEXT", "QARMA ONLY! " + tr("Preset text for the last entry")) <<
                             Help("--add-password=Field name", tr("Add a new Password Entry in forms dialog")) <<
                             Help("--add-calendar=Calendar field name", tr("Add a new Calendar in forms dialog")) <<
