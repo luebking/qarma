@@ -1708,7 +1708,7 @@ char Qarma::showForms(const QStringList &args)
     QTreeWidget *lastList = NULL;
     QStringList lastListValues, lastListColumns, lastComboValues;
     bool lastListHeader(false);
-    QComboBox *lastCombo = NULL;
+    QComboBox *lastCombo = nullptr, *lastCombo4V = nullptr;
     QWidget *lastEntry = nullptr;
     QString lastEntryValue;
     for (int i = 0; i < args.count(); ++i) {
@@ -1750,15 +1750,23 @@ char Qarma::showForms(const QStringList &args)
         } else if (args.at(i) == "--column-values") {
             lastListColumns = NEXT_ARG.split('|');
         } else if (args.at(i) == "--add-combo") {
-            fl->addRow(NEXT_ARG, lastCombo = new QComboBox(dlg));
+            fl->addRow(NEXT_ARG, lastCombo4V = lastCombo = new QComboBox(dlg));
             lastCombo->addItems(lastComboValues);
             lastComboValues.clear();
         } else if (args.at(i) == "--combo-values") {
             lastComboValues = NEXT_ARG.split('|');
-            if (lastCombo) {
-                lastCombo->addItems(lastComboValues);
+            if (lastCombo4V) {
+                lastCombo4V->addItems(lastComboValues);
                 lastComboValues.clear();
-                lastCombo = NULL;
+                lastCombo4V = nullptr;
+            }
+        } else if (args.at(i) == "--combo-default") {
+            if (lastCombo) {
+                lastCombo->setCurrentText(NEXT_ARG);
+            }
+        } else if (args.at(i) == "--combo-free-entry") {
+            if (lastCombo) {
+                lastCombo->setEditable(true);
             }
         } else if (args.at(i) == "--show-header") {
             lastListHeader = true;
@@ -2104,6 +2112,8 @@ void Qarma::printHelp(const QString &category)
                             Help("--column-values=List of values separated by |", tr("List of values for columns")) <<
                             Help("--add-combo=Combo box field name", tr("Add a new combo box in forms dialog")) <<
                             Help("--combo-values=List of values separated by |", tr("List of values for combo box")) <<
+                            Help("--combo-default=Value", "QARMA ONLY! " + tr("The default value of the last added combo box")) <<
+                            Help("--combo-free-entry", "QARMA ONLY! " + tr("Allow to enter values not in the list the last added combo box")) <<
                             Help("--show-header", tr("Show the columns header")) <<
                             Help("--text=TEXT", tr("Set the dialog text")) <<
                             Help("--separator=SEPARATOR", tr("Set output separator character")) <<
