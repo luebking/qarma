@@ -410,7 +410,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 
 bool Qarma::error(const QString message)
 {
-    printf("Error: %s", qPrintable(message));
+    printf("Error: %s\n", qPrintable(message));
     QMetaObject::invokeMethod(this, "quitOnError", Qt::QueuedConnection);
     return true;
 }
