@@ -819,6 +819,7 @@ char Qarma::showMessage(const QStringList &args, char type)
     SHOW_DIALOG
     // **** grrrrrrrr *****
     // https://github.com/luebking/qarma/issues/62
+    // https://github.com/luebking/qarma/issues/70
     // https://runebook.dev/en/docs/qt/qmessagebox/resizeEvent
     // the suggested spacer however doesn't work, but Qt allows us to fix the size after the show event
     //
@@ -837,39 +838,54 @@ char Qarma::showMessage(const QStringList &args, char type)
             delta.setHeight(qMax(delta.height(), icnLabel->height()));
         // delta is now the virtual label size, subtract if from the dialog
         delta = dlg->size() - delta;
-        QRect r;
+        QSize msgSize, dlgSize;
         QMargins marge = msgLabel->contentsMargins() + QMargins(4,4,4,4);
         if (!wrap) {
-            r = msgLabel->fontMetrics().boundingRect(msgLabel->text());
-        } else if (m_size.width() < 1 || m_size.height() < 1) {
-            // likewise we can apply unilateral --width/--height
-            r = QRect(0,0,QWIDGETSIZE_MAX,QWIDGETSIZE_MAX);
+            dlgSize = msgSize = msgLabel->fontMetrics().boundingRect(msgLabel->text()).size();
+        } else {
+            // figure what size the label and by inference dialog should™ be
             if (m_size.width() > 0)
-                r.setWidth(m_size.width() - delta.width());
-            r = msgLabel->fontMetrics().boundingRect(r, Qt::TextWordWrap, msgLabel->text());
-            if (m_size.height() > 0) {
-                // for only fixed height, calculate the line count and overguess the necessary columns
-                r.setHeight(m_size.height() - delta.height());
-                int lines = qMax(1, r.height()/msgLabel->fontMetrics().lineSpacing());
-                r.setWidth(3*r.width()/(2*lines)); // generous 50% overhead to account for word wrapping, better the dialog is a bit wider than missing text
-            }
-        } else { // or completely fixed size
-            r.setSize(m_size);
+                msgLabel->setFixedWidth(m_size.width() - delta.width());
+            if (m_size.height() > 0)
+                msgLabel->setFixedHeight(m_size.height() - delta.height());
+            msgLabel->adjustSize();
+            dlgSize = msgSize = msgLabel->size();
+
+            // the fixed dimensions will break word wrapping, so release the size
+            msgLabel->setMinimumSize(0,0);
+            msgLabel->setMaximumSize(QWIDGETSIZE_MAX,QWIDGETSIZE_MAX);
+        }
+// fixing the dialog dimensions this way doesn't work because the 8x pad in marge is really important… for some reason…
+#if 0
+        if (m_size.width() > 0 && m_size.height() > 0) {
+            dlgSize = m_size;
             delta = QSize(0,0);
             marge = QMargins();
         }
+#endif
         m_size = QSize(0,0); // reset so the global size adjustment doesn't apply
-        r.setWidth(r.width() + marge.left()+marge.right());
-        r.setHeight(r.height() + marge.top()+marge.bottom());
+        // dlgSize is currently the label size, so reconstruct the context dimensions
+        dlgSize += QSize(marge.left()+marge.right(), marge.top()+marge.bottom());
         // if there's an icon, our new label, regardless of the widths sufficient for one unwrapped line, gets at least its height
         if (icnLabel)
-            r.setHeight(qMax(r.height(), icnLabel->height()));
-        dlg->setFixedSize(delta + r.size());
+            dlgSize.setHeight(qMax(dlgSize.height(), icnLabel->height()));
+        dlgSize += delta;
+
+        // Since QMessageBox is adamant about screwing this up, track whether the label width stays what we asked for
+        // and otherwise fix its size. This *cannot* be unconditional because it would break word wrapping
+        auto forceSize = [=]() {
+            dlg->setFixedSize(dlgSize);
+            if (msgLabel->width() < msgSize.width() /*|| msgLabel->height() < msgSize.height()*/) {
+                msgLabel->setFixedSize(msgSize);
+                dlg->setFixedSize(dlgSize);
+            }
+        };
+        forceSize();
         // here's the catch - the WM migth think the pre-showing size is mandatory
         // (probably race condition between window mapping and the size fix and the WM handling client messages)
         // so we briefly wait (100ms is a complete random time) and set the current size again to get the WM up to speed
         for (int ms = 2; ms < 150; ms*=2) {
-            QTimer::singleShot(ms, this, [=]() {dlg->setFixedSize(delta + r.size());});
+            QTimer::singleShot(ms, this, [=]() { forceSize(); });
         }
     }
     return 0;
