@@ -376,8 +376,12 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
             QTimer::singleShot(10, this, [=]() {m_dialog->setWindowTitle(""); m_dialog->setWindowTitle(m_caption);});
         // so much for setting the window title - despite Qt trying to do it by itself
 
-        if (!m_icon.isNull())
-            m_dialog->setWindowIcon(QIcon(m_icon));
+        if (!m_icon.isNull()) {
+            QIcon icon = QIcon::fromTheme(m_icon);
+            if (icon.availableSizes().isEmpty())
+                QIcon icon = QIcon(m_icon);
+            m_dialog->setWindowIcon(icon);
+        }
         QDialogButtonBox *box = m_dialog->findChild<QDialogButtonBox*>();
         if (box && !m_ok.isNull()) {
             if (QPushButton *btn = box->button(QDialogButtonBox::Ok)) {
@@ -788,8 +792,13 @@ char Qarma::showMessage(const QStringList &args, char type)
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--text")
             dlg->setText(html ? labelText(NEXT_ARG) : NEXT_ARG);
-        else if (args.at(i) == "--icon-name")
-            dlg->setIconPixmap(QIcon(NEXT_ARG).pixmap(64));
+        else if (args.at(i) == "--icon-name") {
+            const QString iconName = NEXT_ARG;
+            QPixmap pixmap = QIcon(iconName).pixmap(64);
+            if (pixmap.isNull())
+                pixmap = QIcon::fromTheme(iconName).pixmap(64);
+            dlg->setIconPixmap(pixmap);
+        }
         else if (args.at(i) == "--no-wrap")
             wrap = false;
         else if (args.at(i) == "--ellipsize")
