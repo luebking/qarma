@@ -1357,11 +1357,28 @@ void Qarma::readStdIn()
                 continue;
             if (line.left(split) == "icon") {
                 userNeedsHelp = false;
-                // TODO: some icon filename, seems gnome specific and i've no idea how to handle this atm.
-                // Commands include ‘message’, ‘tooltip’, ‘icon’, and ‘visible’ separated by a colon.
-                // For example, ‘message: Hello world’, ‘visible: false’, or ‘icon: /path/to/icon’.
-                // The icon command also accepts the four stock icon: ‘error’, ‘info’, ‘question’, and ‘warning’
-                qWarning("'icon' command not yet supported - if you know what this is supposed to do, please file a bug");
+                const QString icon = line.mid(split+1).trimmed();
+                // TODO: implement image-path hint??
+                if (QMessageBox *dlg = static_cast<QMessageBox*>(m_dialog)) {
+                    if (icon.isEmpty())
+                        dlg->setIcon(QMessageBox::NoIcon);
+                    else if (icon == "error")
+                        dlg->setIcon(QMessageBox::Critical);
+                    else if (icon == "info")
+                        dlg->setIcon(QMessageBox::Information);
+                    else if (icon == "question")
+                        dlg->setIcon(QMessageBox::Question);
+                    else if (icon == "warning")
+                        dlg->setIcon(QMessageBox::Warning);
+                    else {
+                        QPixmap pixmap = QIcon(icon).pixmap(64);
+                        if (pixmap.isNull())
+                            pixmap = QIcon::fromTheme(icon).pixmap(64);
+                        dlg->setIconPixmap(pixmap);
+                    }
+                } else {
+                    qWarning("'icon' command only supported for failsafe dialog notification");
+                }
             } else if (line.left(split) == "message" || line.left(split) == "tooltip") {
                 userNeedsHelp = false;
                 notify(line.mid(split+1));
