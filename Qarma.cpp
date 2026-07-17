@@ -379,7 +379,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
         if (!m_icon.isNull()) {
             QIcon icon = QIcon::fromTheme(m_icon);
             if (icon.availableSizes().isEmpty())
-                QIcon icon = QIcon(m_icon);
+                icon = QIcon(m_icon);
             m_dialog->setWindowIcon(icon);
         }
         QDialogButtonBox *box = m_dialog->findChild<QDialogButtonBox*>();
