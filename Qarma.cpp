@@ -1194,7 +1194,7 @@ void Qarma::notify(const QString message, bool noClose)
             m_notificationId = msg.arguments().at(0).toUInt();
         return;
     }
-
+#endif
     QMessageBox *dlg = static_cast<QMessageBox*>(m_dialog);
     if (!dlg) {
         dlg = new QMessageBox;
@@ -1212,7 +1212,6 @@ void Qarma::notify(const QString message, bool noClose)
     SHOW_DIALOG
     dlg->adjustSize();
     dlg->move(QGuiApplication::screens().at(0)->availableGeometry().topRight() - QPoint(dlg->width() + 20, -20));
-#endif
 }
 
 char Qarma::showNotification(const QStringList &args)
@@ -1359,6 +1358,9 @@ void Qarma::readStdIn()
             if (line.left(split) == "icon") {
                 userNeedsHelp = false;
                 // TODO: some icon filename, seems gnome specific and i've no idea how to handle this atm.
+                // Commands include ‘message’, ‘tooltip’, ‘icon’, and ‘visible’ separated by a colon.
+                // For example, ‘message: Hello world’, ‘visible: false’, or ‘icon: /path/to/icon’.
+                // The icon command also accepts the four stock icon: ‘error’, ‘info’, ‘question’, and ‘warning’
                 qWarning("'icon' command not yet supported - if you know what this is supposed to do, please file a bug");
             } else if (line.left(split) == "message" || line.left(split) == "tooltip") {
                 userNeedsHelp = false;
