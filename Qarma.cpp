@@ -2249,7 +2249,7 @@ void Qarma::printHelp(const QString &category)
 int main (int argc, char **argv)
 {
     if (argc > 0)
-        QCoreApplication::setApplicationName(argv[0]); // autoset my ass…
+        QCoreApplication::setApplicationName(QFileInfo(argv[0]).baseName()); // autoset my ass…
     if (argc < 2) {
         Qarma::printHelp();
         return 1;
