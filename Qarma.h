@@ -61,11 +61,12 @@ private slots:
     void dialogFinished(int status);
     void printInteger(int v);
     void quitOnError();
+    void centerDialog();
     void readStdIn();
     void toggleItems(QTreeWidgetItem *item, int column);
     void finishProgress();
 private:
-    bool m_helpMission, m_modal, m_zenity, m_selectableLabel, m_popup;
+    bool m_helpMission, m_modal, m_zenity, m_selectableLabel, m_popup, m_center;
     QString m_caption, m_icon, m_ok, m_cancel, m_notificationHints, m_class, m_name;
     QSize m_size;
     QPoint m_pos;

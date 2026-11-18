@@ -184,6 +184,7 @@ Qarma::Qarma(int &argc, char **argv) : QApplication(argc, argv)
 , m_modal(false)
 , m_selectableLabel(false)
 , m_popup(false)
+, m_center(false)
 , m_parentWindow(0)
 , m_timeout(0)
 , m_notificationId(0)
@@ -459,6 +460,23 @@ void Qarma::dialogFinished(int status)
         settings.setValue("FileDetails", dlg->viewMode() == QFileDialog::Detail);
     }
 
+    // zenity compatible --extra-button: print the label of the pressed extra button and exit with 1
+    if (QMessageBox *msgBox = qobject_cast<QMessageBox*>(sender())) {
+        if (msgBox->property("qarma_has_extra_buttons").toBool()) {
+            QAbstractButton *clicked = msgBox->clickedButton();
+            if (clicked && clicked->property("qarma_extra_button").toBool()) {
+                printf("%s\n", qPrintable(clicked->text()));
+                exit(1);
+                return;
+            }
+            // the status of custom buttons is just their index and may look like Accepted, so don't rely on it
+            if (!clicked || clicked->property("qarma_escape_button").toBool()) {
+                exit(1);
+                return;
+            }
+        }
+    }
+
     if (!(status == QDialog::Accepted || status == QMessageBox::Ok || status == QMessageBox::Yes)) {
 #ifdef Q_OS_UNIX
         if (sender()->property("qarma_autokill_parent").toBool()) {
@@ -620,9 +638,25 @@ void Qarma::quitOnError()
     exit(1);
 }
 
+// QARMA ONLY: centers the dialog on the screen the mouse pointer is on.
+// The window manager and QMessageBox's size fixing change position and size after the first show,
+// so this is called repeatedly with growing delays (see SHOW_DIALOG) until things settle.
+void Qarma::centerDialog()
+{
+    if (!m_dialog)
+        return;
+    QScreen *screen = QGuiApplication::screenAt(QCursor::pos());
+    if (!screen)
+        screen = QGuiApplication::primaryScreen();
+    const QRect area = screen->availableGeometry();
+    const QSize sz = m_dialog->frameGeometry().size();
+    m_dialog->move(area.center() - QPoint(sz.width()/2, sz.height()/2));
+}
+
 #define NEXT_ARG QString((++i < args.count()) ? args.at(i) : QString())
 #define WARN_UNKNOWN_ARG(_KNOWN_) if (args.at(i).startsWith("--") && args.at(i) != _KNOWN_) qDebug() << "unspecific argument" << args.at(i);
-#define SHOW_DIALOG m_dialog = dlg; connect(dlg, SIGNAL(finished(int)), SLOT(dialogFinished(int))); dlg->show();
+#define SHOW_DIALOG m_dialog = dlg; connect(dlg, SIGNAL(finished(int)), SLOT(dialogFinished(int))); dlg->show(); \
+    if (m_center) { for (int ms = 0; ms < 400; ms = ms*2 + 10) QTimer::singleShot(ms, this, SLOT(centerDialog())); }
 #define READ_INT(_V_, _TYPE_, _ERROR_) bool ok; const int _V_ = NEXT_ARG.to##_TYPE_(&ok, 0); if (!ok) return !error(_ERROR_)
 
 bool Qarma::readGeneral(QStringList &args) {
@@ -656,6 +690,8 @@ bool Qarma::readGeneral(QStringList &args) {
             m_cancel = NEXT_ARG;
         } else if (args.at(i) == "--modal") {
             m_modal = true;
+        } else if (args.at(i) == "--center") {
+            m_center = true;
         } else if (args.at(i) == "--popup") {
             m_popup = true;
         } else if (args.at(i) == "--attach") {
@@ -788,10 +824,15 @@ char Qarma::showMessage(const QStringList &args, char type)
     dlg->setStandardButtons((type == 'q') ? QMessageBox::Yes|QMessageBox::No : QMessageBox::Ok);
     dlg->setDefaultButton(QMessageBox::Ok);
 
-    bool wrap = true, html = true;
+    bool wrap = true, html = true, switchButtons = false;
+    QStringList extraButtons;
     for (int i = 0; i < args.count(); ++i) {
         if (args.at(i) == "--text")
             dlg->setText(html ? labelText(NEXT_ARG) : NEXT_ARG);
+        else if (args.at(i) == "--extra-button")
+            extraButtons << NEXT_ARG;
+        else if (args.at(i) == "--switch")
+            switchButtons = true;
         else if (args.at(i) == "--icon-name") {
             const QString iconName = NEXT_ARG;
             QPixmap pixmap = QIcon(iconName).pixmap(64);
@@ -812,6 +853,23 @@ char Qarma::showMessage(const QStringList &args, char type)
         else if (args.at(i).startsWith("--") && args.at(i) != "--info" && args.at(i) != "--question" &&
                                                 args.at(i) != "--warning" && args.at(i) != "--error")
             qDebug() << "unspecific argument" << args.at(i);
+    }
+    // zenity compatible: --switch drops the standard buttons, --extra-button adds one button per use
+    // (in the given order); clicking one prints its text to stdout and exits with 1, see dialogFinished()
+    if (switchButtons)
+        dlg->setStandardButtons(QMessageBox::NoButton);
+    for (const QString &text : extraButtons) {
+        QPushButton *btn = dlg->addButton(text, QMessageBox::ActionRole);
+        btn->setProperty("qarma_extra_button", true);
+    }
+    if (!extraButtons.isEmpty()) {
+        dlg->setProperty("qarma_has_extra_buttons", true);
+        // Esc and the window close button must not be ignored just because no standard button exists:
+        // a hidden reject button is the escape button, so closing the dialog exits with 1 and prints nothing
+        QPushButton *esc = dlg->addButton(QString(), QMessageBox::RejectRole);
+        esc->setProperty("qarma_escape_button", true);
+        esc->hide();
+        dlg->setEscapeButton(esc);
     }
     QLabel *msgLabel = dlg->findChild<QLabel*>("qt_msgbox_label");
     if (msgLabel) {
@@ -2043,6 +2101,7 @@ void Qarma::printHelp(const QString &category)
                             Help("--ok-label=TEXT", tr("Sets the label of the Ok button")) <<
                             Help("--cancel-label=TEXT", tr("Sets the label of the Cancel button")) <<
                             Help("--modal", tr("Set the modal hint")) <<
+                            Help("--center", "QARMA ONLY! " + tr("Center the dialog on the screen of the mouse pointer")) <<
                             Help("--popup", "QARMA ONLY! " + tr("Open dialog as unframed and trasient popup window")) <<
                             Help("--attach=WINDOW", tr("Set the parent window to attach to")));
         helpDict["calendar"] = CategoryHelp(tr("Calendar options"), HelpList() <<
@@ -2113,6 +2172,8 @@ void Qarma::printHelp(const QString &category)
                             Help("--no-wrap", tr("Do not enable text wrapping")) <<
                             Help("--no-markup", tr("Do not enable html markup")) <<
                             Help("--default-cancel", tr("Give cancel button focus by default")) <<
+                            Help("--switch", tr("Suppress the standard buttons, only extra buttons are shown")) <<
+                            Help("--extra-button=TEXT", tr("Add an extra button, it prints its text and exits with 1 when pressed")) <<
                             Help("--ellipsize", tr("Do wrap text, zenity has a rather special problem here")) <<
                             Help("--selectable-labels", "QARMA ONLY! " + tr("Allow to select text for copy and paste")));
         helpDict["warning"] = CategoryHelp(tr("Warning options"), HelpList() <<
